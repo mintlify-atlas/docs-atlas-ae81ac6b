@@ -1,0 +1,129 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "ZBar",
+  "projectDescription": "Open source barcode reading library supporting multiple symbologies, video capture, and cross-platform integration",
+  "theme": "aspen",
+  "primaryColor": "#dc0a7d",
+  "lightColor": "#0d8381",
+  "darkColor": "#a0a193",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/scanning-images",
+              "guides/video-scanning",
+              "guides/integration",
+              "guides/configuration"
+            ]
+          },
+          {
+            "group": "Language Bindings",
+            "pages": [
+              "bindings/c-cpp",
+              "bindings/python",
+              "bindings/perl",
+              "bindings/java"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/overview",
+              "api/image-scanner",
+              "api/processor",
+              "api/decoder",
+              "api/symbols"
+            ]
+          },
+          {
+            "group": "Video & Display",
+            "pages": [
+              "api/video",
+              "api/window"
+            ]
+          },
+          {
+            "group": "GUI Widgets",
+            "pages": [
+              "api/gtk-widget",
+              "api/qt-widget"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced",
+        "groups": [
+          {
+            "group": "Symbologies",
+            "pages": [
+              "symbologies/overview",
+              "symbologies/1d-codes",
+              "symbologies/2d-codes"
+            ]
+          },
+          {
+            "group": "Platform Support",
+            "pages": [
+              "platforms/linux",
+              "platforms/windows",
+              "platforms/macos",
+              "platforms/mobile"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/building",
+              "development/contributing",
+              "development/troubleshooting"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-format barcode scanning (EAN, UPC, Code 128, Code 93, Code 39, QR Code, etc.)",
+    "Video capture support via V4L2 on Linux",
+    "Cross-platform support (Linux, Windows, macOS)",
+    "Language bindings for C, C++, Python, Perl, and Java",
+    "GUI widgets for Qt and GTK",
+    "Command-line tools (zbarcam, zbarimg)",
+    "Image processing and format conversion",
+    "D-Bus integration for IPC"
+  ],
+  "publicApiSurface": [
+    "zbar_image_scanner_create",
+    "zbar_scan_image",
+    "zbar_processor_create",
+    "zbar_process_image",
+    "zbar_decoder_create",
+    "zbar_decode_width",
+    "zbar_video_create",
+    "zbar_video_open",
+    "zbar_symbol_get_type",
+    "zbar_symbol_get_data",
+    "zbar_image_create",
+    "zbar_image_convert",
+    "zbar_parse_config",
+    "zbar_set_verbosity"
+  ]
+}
