@@ -1,0 +1,456 @@
+---
+title: macOS
+description: Build and use ZBar Advanced on macOS systems
+---
+
+ZBar Advanced provides native support for macOS with easy installation via Homebrew and full camera integration.
+
+## System Requirements
+
+- macOS 10.10 (Yosemite) or later
+- Xcode Command Line Tools
+- Homebrew (recommended for easy installation)
+
+## Quick Installation with Homebrew
+
+The easiest way to install ZBar on macOS is using Homebrew:
+
+```bash
+brew install zbar
+```
+
+This installs:
+- Core ZBar library (`libzbar`)
+- Command-line tools (`zbarcam`, `zbarimg`)
+- All necessary dependencies
+
+### Verifying Installation
+
+```bash
+# Check version
+zbarcam --version
+zbarimg --version
+
+# Scan a test image
+zbarimg test-barcode.png
+```
+
+## Building from Source
+
+### Prerequisites
+
+#### Install Xcode Command Line Tools
+
+```bash
+xcode-select --install
+```
+
+#### Install Build Dependencies
+
+```bash
+brew install \
+  autoconf automake libtool pkg-config \
+  imagemagick jpeg libpng
+```
+
+### Basic Build
+
+```bash
+# Clone or download source
+cd zbar-source
+
+# Generate configure script
+autoreconf -vfi
+
+# Configure
+./configure
+
+# Build
+make
+
+# Install
+sudo make install
+```
+
+### Build Configuration Options
+
+<AccordionGroup>
+  <Accordion title="Video Capture Support">
+    macOS uses native video capture frameworks:
+    
+    ```bash
+    # Enable video support (default)
+    ./configure --enable-video
+    
+    # Disable video support
+    ./configure --disable-video
+    ```
+    
+    <Note>
+    macOS video support uses AVFoundation and CoreMedia frameworks, automatically linked during build.
+    </Note>
+  </Accordion>
+
+  <Accordion title="GUI Widget Support">
+    ```bash
+    # Qt widget (requires Qt installation)
+    brew install qt@5
+    ./configure --with-qt
+    
+    # Disable Qt
+    ./configure --without-qt
+    
+    # GTK widget (requires GTK via Homebrew)
+    brew install gtk+3
+    ./configure --with-gtk=gtk3
+    ```
+  </Accordion>
+
+  <Accordion title="Python Bindings">
+    ```bash
+    # Auto-detect Python version
+    ./configure --with-python=auto
+    
+    # Specific Python version
+    ./configure --with-python=python3
+    
+    # Disable Python
+    ./configure --without-python
+    ```
+  </Accordion>
+
+  <Accordion title="Image Format Support">
+    ```bash
+    # ImageMagick for zbarimg (recommended)
+    brew install imagemagick
+    ./configure --with-imagemagick
+    
+    # JPEG support
+    brew install jpeg
+    ./configure --with-jpeg
+    
+    # Disable image scanning
+    ./configure --without-imagemagick --without-jpeg
+    ```
+  </Accordion>
+
+  <Accordion title="Threading Support">
+    ```bash
+    # Enable pthread support (recommended)
+    ./configure --enable-pthread
+    
+    # Disable threading
+    ./configure --disable-pthread
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Full-Featured Build
+
+```bash
+# Install all optional dependencies
+brew install \
+  imagemagick qt@5 gtk+3 python3
+
+# Configure with all features
+autoreconf -vfi
+./configure \
+  --with-python=python3 \
+  --with-gtk=gtk3 \
+  --with-qt \
+  --enable-pthread \
+  --with-imagemagick
+
+# Build and install
+make
+sudo make install
+```
+
+## Video Capture Options
+
+macOS uses **AVFoundation** and **CoreMedia** frameworks for camera access.
+
+### Camera Access Permissions
+
+Starting with macOS 10.14 (Mojave), apps require explicit camera permissions:
+
+1. When you first run `zbarcam`, macOS will prompt for camera access
+2. Grant permission in **System Preferences → Security & Privacy → Camera**
+3. Terminal or your IDE must have camera permission
+
+### Testing Camera Access
+
+```bash
+# Use default camera
+zbarcam
+
+# Specify camera device index
+zbarcam 0  # First camera
+zbarcam 1  # Second camera (if available)
+```
+
+### Listing Available Cameras
+
+macOS doesn't provide a built-in command to list cameras, but you can use:
+
+```bash
+# Using system_profiler
+system_profiler SPCameraDataType
+
+# Or simply try device indices
+zbarcam 0
+zbarcam 1
+```
+
+## Using ZBar Applications
+
+### zbarcam (Video Scanner)
+
+```bash
+# Start with default camera
+zbarcam
+
+# Specify symbology
+zbarcam --set qrcode.enable=1
+
+# Set custom resolution (if supported by camera)
+zbarcam --width=1920 --height=1080
+
+# Show raw output only
+zbarcam --raw
+```
+
+### zbarimg (Image Scanner)
+
+```bash
+# Scan single image
+zbarimg barcode.png
+
+# Scan multiple images
+zbarimg *.jpg *.png
+
+# Enable specific symbology
+zbarimg --set ean13.enable=1 product.jpg
+
+# Output raw data
+zbarimg --raw invoice.png
+
+# Verbose output
+zbarimg -v barcode.png
+```
+
+## iOS Development
+
+For iOS applications, ZBar provides an iOS SDK with Objective-C wrappers.
+
+### iOS SDK Location
+
+The iOS SDK is available in the source distribution:
+```
+zbar-source/iphone/
+```
+
+### Adding to Xcode Project
+
+1. **Drag ZBarSDK** into your Xcode project
+2. **Add required frameworks**:
+   - `AVFoundation.framework` (weak link)
+   - `CoreMedia.framework` (weak link)
+   - `CoreVideo.framework` (weak link)
+   - `QuartzCore.framework`
+   - `libiconv.dylib`
+
+### iOS SDK Components
+
+- `ZBarReaderViewController` - Full-screen barcode scanner
+- `ZBarReaderView` - Embeddable scanner view
+- `ZBarImageScanner` - Scan from images
+- `ZBarCaptureReader` - Camera capture integration
+
+### Example iOS Usage
+
+```objective-c
+#import <ZBarSDK/ZBarSDK.h>
+
+// Create reader
+ZBarReaderViewController *reader = [ZBarReaderViewController new];
+reader.readerDelegate = self;
+
+// Configure scanner
+ZBarImageScanner *scanner = reader.scanner;
+[scanner setSymbology:ZBAR_QRCODE config:ZBAR_CFG_ENABLE to:1];
+
+// Present scanner
+[self presentViewController:reader animated:YES completion:nil];
+```
+
+<Note>
+Complete iOS documentation and examples are available in `iphone/Documentation.html` and `iphone/examples/` directories.
+</Note>
+
+## Pre-built Binaries
+
+Pre-compiled macOS binaries are available from:
+
+```
+https://linuxtv.org/downloads/zbar/binaries/
+```
+
+These include:
+- Universal binaries (Intel and Apple Silicon)
+- All dependencies bundled
+- Ready to run without additional setup
+
+### Installing from Binary
+
+1. Download the macOS package
+2. Extract the archive
+3. Copy binaries to `/usr/local/bin/` (or any location in PATH)
+4. Copy libraries to `/usr/local/lib/`
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Camera permission denied">
+    **System Preferences → Security & Privacy → Camera**
+    
+    Ensure Terminal (or your IDE) has camera access:
+    1. Open System Preferences
+    2. Security & Privacy → Privacy tab
+    3. Camera (left sidebar)
+    4. Check box next to Terminal/IDE
+    
+    May need to restart the application after granting permission.
+  </Accordion>
+
+  <Accordion title="Build fails: command line tools not found">
+    Install Xcode Command Line Tools:
+    ```bash
+    xcode-select --install
+    ```
+    
+    Verify installation:
+    ```bash
+    xcode-select -p
+    # Should output: /Library/Developer/CommandLineTools
+    ```
+  </Accordion>
+
+  <Accordion title="Library not loaded errors">
+    If you see errors like:
+    ```
+    dyld: Library not loaded: /usr/local/lib/libzbar.0.dylib
+    ```
+    
+    Update library cache:
+    ```bash
+    sudo update_dyld_shared_cache
+    ```
+    
+    Or set library path:
+    ```bash
+    export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH
+    ```
+  </Accordion>
+
+  <Accordion title="Python bindings not found">
+    Ensure Python development headers are available:
+    ```bash
+    brew install python3
+    
+    # Configure with specific Python
+    ./configure --with-python=python3 \
+      PYTHON=/usr/local/bin/python3
+    ```
+    
+    After installation, verify:
+    ```python
+    import zbar
+    print(zbar.__version__)
+    ```
+  </Accordion>
+
+  <Accordion title="Qt moc not found">
+    If Qt build fails with moc errors:
+    ```bash
+    brew install qt@5
+    
+    # Add Qt to PATH
+    export PATH="/usr/local/opt/qt@5/bin:$PATH"
+    
+    # Reconfigure
+    ./configure --with-qt
+    ```
+  </Accordion>
+
+  <Accordion title="Camera shows black screen">
+    - Grant camera permissions (see above)
+    - Try different camera index: `zbarcam 1`
+    - Check camera is not in use: quit other camera apps
+    - Test camera in Photo Booth app
+  </Accordion>
+</AccordionGroup>
+
+## Homebrew Formula Details
+
+The Homebrew formula for ZBar includes:
+
+```ruby
+# View formula
+brew info zbar
+
+# Dependencies automatically installed
+- imagemagick
+- jpeg
+- pkg-config
+```
+
+### Updating via Homebrew
+
+```bash
+# Update Homebrew
+brew update
+
+# Upgrade ZBar
+brew upgrade zbar
+
+# Or reinstall
+brew reinstall zbar
+```
+
+## Universal Binaries (Apple Silicon)
+
+For Apple Silicon Macs (M1, M2, M3), ZBar supports both:
+- **Native ARM64** builds
+- **x86_64** builds (via Rosetta 2)
+- **Universal** binaries (both architectures)
+
+### Building Universal Binary
+
+```bash
+./configure CFLAGS="-arch arm64 -arch x86_64" \
+            CXXFLAGS="-arch arm64 -arch x86_64" \
+            LDFLAGS="-arch arm64 -arch x86_64"
+make
+```
+
+<Tip>
+Homebrew automatically installs the correct architecture for your Mac.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Start scanning barcodes
+  </Card>
+  <Card title="iOS SDK" icon="mobile" href="/platforms/mobile#ios">
+    Build iOS apps with ZBar
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Integrate into your application
+  </Card>
+  <Card title="Examples" icon="book" href="/quickstart">
+    See code examples
+  </Card>
+</CardGroup>

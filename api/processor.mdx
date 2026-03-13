@@ -1,0 +1,626 @@
+---
+title: "Processor"
+description: "High-level self-contained image processor for video capture and barcode scanning"
+---
+
+## Overview
+
+The Processor is a high-level interface that processes video and images for barcodes, optionally displaying them in a library-owned output window. It integrates video capture, image scanning, and display into a single convenient interface.
+
+## Key Features
+
+- Integrated video capture and scanning
+- Optional display window with overlay
+- Threading support for improved responsiveness
+- Built-in result callbacks
+- Video device control
+
+## Object Management
+
+### zbar_processor_create
+
+Create a new processor instance.
+
+```c
+zbar_processor_t *zbar_processor_create(int threaded);
+```
+
+<ParamField path="threaded" type="int" required>
+  If non-zero and threading is available, the processor will spawn threads to avoid blocking and improve responsiveness
+</ParamField>
+
+<ResponseField name="return" type="zbar_processor_t*">
+  Pointer to the new processor object
+</ResponseField>
+
+**Example:**
+```c
+// Create with threading enabled
+zbar_processor_t *proc = zbar_processor_create(1);
+```
+
+### zbar_processor_destroy
+
+Destroy a processor and clean up all associated resources.
+
+```c
+void zbar_processor_destroy(zbar_processor_t *processor);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor to destroy
+</ParamField>
+
+## Initialization
+
+### zbar_processor_init
+
+Initialize the processor with video input and/or display output.
+
+```c
+int zbar_processor_init(zbar_processor_t *processor,
+                        const char *video_device,
+                        int enable_display);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="video_device" type="const char*">
+  Platform-specific video device name (e.g., "/dev/video0" on Linux), or NULL for no video input
+</ParamField>
+
+<ParamField path="enable_display" type="int" required>
+  Non-zero to enable the display window
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 on success, -1 on error
+</ResponseField>
+
+**Example:**
+```c
+zbar_processor_t *proc = zbar_processor_create(1);
+
+// Initialize with video device and display
+if (zbar_processor_init(proc, "/dev/video0", 1) < 0) {
+    fprintf(stderr, "Failed to initialize: %s\n",
+            zbar_processor_error_string(proc, 0));
+    zbar_processor_destroy(proc);
+    return -1;
+}
+```
+
+### zbar_processor_request_size
+
+Request a preferred size for video images.
+
+```c
+int zbar_processor_request_size(zbar_processor_t *processor,
+                                unsigned width,
+                                unsigned height);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="width" type="unsigned" required>
+  Requested image width in pixels
+</ParamField>
+
+<ParamField path="height" type="unsigned" required>
+  Requested image height in pixels
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 on success, -1 on error
+</ResponseField>
+
+<Note>
+Must be called before `zbar_processor_init()`. The request may be adjusted or ignored by the video driver.
+</Note>
+
+### zbar_processor_request_interface
+
+Request a preferred video driver interface version.
+
+```c
+int zbar_processor_request_interface(zbar_processor_t *processor,
+                                     int version);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="version" type="int" required>
+  Driver interface version to request
+</ParamField>
+
+<Note>
+Must be called before `zbar_processor_init()`. Used for debug/testing.
+</Note>
+
+### zbar_processor_request_iomode
+
+Request a preferred video I/O mode.
+
+```c
+int zbar_processor_request_iomode(zbar_processor_t *processor,
+                                  int iomode);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="iomode" type="int" required>
+  I/O mode: 0=auto-detect, 1=read(), 2=mmap(), 3=USERPTR (v4l2 only)
+</ParamField>
+
+<Note>
+Must be called before `zbar_processor_init()`. You will get errors if the driver does not support the specified mode.
+</Note>
+
+### zbar_processor_force_format
+
+Force specific input and output formats.
+
+```c
+int zbar_processor_force_format(zbar_processor_t *processor,
+                                unsigned long input_format,
+                                unsigned long output_format);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="input_format" type="unsigned long" required>
+  Input format fourcc code
+</ParamField>
+
+<ParamField path="output_format" type="unsigned long" required>
+  Output format fourcc code
+</ParamField>
+
+<Note>
+Must be called before `zbar_processor_init()`. Used for debug/testing.
+</Note>
+
+## Configuration
+
+### zbar_processor_set_config
+
+Set configuration for specified symbology.
+
+```c
+int zbar_processor_set_config(zbar_processor_t *processor,
+                              zbar_symbol_type_t symbology,
+                              zbar_config_t config,
+                              int value);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="symbology" type="zbar_symbol_type_t" required>
+  The barcode symbology to configure (or 0 for all)
+</ParamField>
+
+<ParamField path="config" type="zbar_config_t" required>
+  The configuration parameter to set
+</ParamField>
+
+<ParamField path="value" type="int" required>
+  The value to set
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 for success, non-0 for failure
+</ResponseField>
+
+**Example:**
+```c
+// Enable all symbologies
+zbar_processor_set_config(proc, 0, ZBAR_CFG_ENABLE, 1);
+
+// Disable Code 39
+zbar_processor_set_config(proc, ZBAR_CODE39, ZBAR_CFG_ENABLE, 0);
+```
+
+### zbar_processor_parse_config
+
+Parse and apply configuration from a string.
+
+```c
+int zbar_processor_parse_config(zbar_processor_t *processor,
+                                const char *config_string);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="config_string" type="const char*" required>
+  Configuration string in format "[symbology.]config[=value]"
+</ParamField>
+
+### zbar_processor_set_control
+
+Set video control value.
+
+```c
+int zbar_processor_set_control(zbar_processor_t *processor,
+                               const char *control_name,
+                               int value);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="control_name" type="const char*" required>
+  Name of the video control (e.g., "brightness", "contrast")
+</ParamField>
+
+<ParamField path="value" type="int" required>
+  Value to set
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 for success, non-0 for failure
+</ResponseField>
+
+### zbar_processor_get_control
+
+Get video control value.
+
+```c
+int zbar_processor_get_control(zbar_processor_t *processor,
+                               const char *control_name,
+                               int *value);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="control_name" type="const char*" required>
+  Name of the video control
+</ParamField>
+
+<ParamField path="value" type="int*" required>
+  Pointer to store the retrieved value
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 for success, non-0 for failure
+</ResponseField>
+
+## Display Control
+
+### zbar_processor_set_visible
+
+Show or hide the display window.
+
+```c
+int zbar_processor_set_visible(zbar_processor_t *processor,
+                               int visible);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="visible" type="int" required>
+  Non-zero to show window, 0 to hide
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 on success, -1 on error
+</ResponseField>
+
+### zbar_processor_is_visible
+
+Check if the display window is currently visible.
+
+```c
+int zbar_processor_is_visible(zbar_processor_t *processor);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 1 if visible, 0 if not visible, -1 on error
+</ResponseField>
+
+## Processing Control
+
+### zbar_processor_set_active
+
+Control the processor in free running video mode.
+
+```c
+int zbar_processor_set_active(zbar_processor_t *processor,
+                              int active);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="active" type="int" required>
+  Non-zero to start processing, 0 to stop
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 on success, -1 on error
+</ResponseField>
+
+Only works if video input is initialized. If threading is enabled, scanning occurs in the background. If the display window is visible, video display will be enabled.
+
+### zbar_process_one
+
+Process video until a result is available or timeout expires.
+
+```c
+int zbar_process_one(zbar_processor_t *processor,
+                     int timeout);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="timeout" type="int" required>
+  Timeout in milliseconds (-1 for indefinite)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  - Positive: Symbols successfully decoded
+  - 0: No symbols found (timeout expired)
+  - -1: Error occurred
+</ResponseField>
+
+If the display window is visible, video will be shown. Despite the name, multiple results may be returned.
+
+**Example:**
+```c
+// Scan until barcode found or user aborts
+int n = zbar_process_one(proc, -1);
+if (n > 0) {
+    printf("Found %d symbols\n", n);
+}
+```
+
+### zbar_process_image
+
+Process a static image for barcodes.
+
+```c
+int zbar_process_image(zbar_processor_t *processor,
+                       zbar_image_t *image);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="image" type="zbar_image_t*" required>
+  The image to process
+</ParamField>
+
+<ResponseField name="return" type="int">
+  - Positive: Symbols successfully decoded
+  - 0: No symbols found
+  - -1: Error occurred
+</ResponseField>
+
+If the display window is visible, the image will be displayed.
+
+### zbar_processor_user_wait
+
+Wait for user input to the display window.
+
+```c
+int zbar_processor_user_wait(zbar_processor_t *processor,
+                             int timeout);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="timeout" type="int" required>
+  Timeout in milliseconds (-1 for indefinite)
+</ParamField>
+
+<ResponseField name="return" type="int">
+  - Positive: Input received
+  - 0: Timeout expired
+  - -1: Error occurred
+</ResponseField>
+
+Waits for mouse or keyboard input from the user.
+
+## Results
+
+### zbar_processor_get_results
+
+Retrieve decode results for the last scanned image/frame.
+
+```c
+const zbar_symbol_set_t *zbar_processor_get_results(
+    const zbar_processor_t *processor);
+```
+
+<ParamField path="processor" type="const zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ResponseField name="return" type="const zbar_symbol_set_t*">
+  The symbol set result container, or NULL if no results available
+</ResponseField>
+
+<Note>
+The returned symbol set has its reference count incremented. Ensure you decrement the count after use.
+</Note>
+
+## Callbacks
+
+### zbar_processor_set_data_handler
+
+Setup result handler callback.
+
+```c
+zbar_image_data_handler_t *zbar_processor_set_data_handler(
+    zbar_processor_t *processor,
+    zbar_image_data_handler_t *handler,
+    const void *userdata);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="handler" type="zbar_image_data_handler_t*" required>
+  Callback function (or NULL to disable)
+</ParamField>
+
+<ParamField path="userdata" type="const void*">
+  User data passed to callback
+</ParamField>
+
+<ResponseField name="return" type="zbar_image_data_handler_t*">
+  The previously registered handler
+</ResponseField>
+
+The callback is invoked whenever new results are available from the video stream or static image.
+
+**Example:**
+```c
+static void my_handler(zbar_image_t *image, const void *userdata) {
+    const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+    for (; symbol; symbol = zbar_symbol_next(symbol)) {
+        zbar_symbol_type_t type = zbar_symbol_get_type(symbol);
+        const char *data = zbar_symbol_get_data(symbol);
+        printf("decoded %s symbol \"%s\"\n",
+               zbar_get_symbol_name(type), data);
+    }
+}
+
+zbar_processor_set_data_handler(proc, my_handler, NULL);
+```
+
+## User Data
+
+### zbar_processor_set_userdata
+
+Associate user data with the processor.
+
+```c
+void zbar_processor_set_userdata(zbar_processor_t *processor,
+                                 void *userdata);
+```
+
+<ParamField path="processor" type="zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ParamField path="userdata" type="void*">
+  Arbitrary user data pointer
+</ParamField>
+
+### zbar_processor_get_userdata
+
+Retrieve user data associated with the processor.
+
+```c
+void *zbar_processor_get_userdata(const zbar_processor_t *processor);
+```
+
+<ParamField path="processor" type="const zbar_processor_t*" required>
+  The processor instance
+</ParamField>
+
+<ResponseField name="return" type="void*">
+  The user data pointer
+</ResponseField>
+
+## Complete Example
+
+```c
+#include <stdio.h>
+#include <zbar.h>
+
+static void my_handler(zbar_image_t *image, const void *userdata) {
+    const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+    for (; symbol; symbol = zbar_symbol_next(symbol)) {
+        zbar_symbol_type_t typ = zbar_symbol_get_type(symbol);
+        const char *data = zbar_symbol_get_data(symbol);
+        printf("decoded %s symbol \"%s\"\n",
+               zbar_get_symbol_name(typ), data);
+    }
+}
+
+int main(int argc, char **argv) {
+    const char *device = "/dev/video0";
+
+    // Create processor with threading
+    zbar_processor_t *proc = zbar_processor_create(1);
+
+    // Enable all symbologies
+    zbar_processor_set_config(proc, 0, ZBAR_CFG_ENABLE, 1);
+
+    // Initialize with video device
+    if (argc > 1)
+        device = argv[1];
+    zbar_processor_init(proc, device, 1);
+
+    // Setup callback
+    zbar_processor_set_data_handler(proc, my_handler, NULL);
+
+    // Show window and start processing
+    zbar_processor_set_visible(proc, 1);
+    zbar_processor_set_active(proc, 1);
+
+    // Wait for user input to exit
+    zbar_processor_user_wait(proc, -1);
+
+    // Cleanup
+    zbar_processor_destroy(proc);
+
+    return 0;
+}
+```
+
+## Error Handling
+
+### zbar_processor_error_string
+
+```c
+const char *zbar_processor_error_string(const zbar_processor_t *processor,
+                                        int verbosity);
+```
+
+Retrieve the detail string for the last error.
+
+### zbar_processor_get_error_code
+
+```c
+zbar_error_t zbar_processor_get_error_code(const zbar_processor_t *processor);
+```
+
+Retrieve the error code for the last error.
+
+## See Also
+
+- [ImageScanner](/api/image-scanner) - Mid-level scanning interface
+- [Symbols](/api/symbols) - Working with decoded results
+- [Overview](/api/overview) - API architecture and patterns

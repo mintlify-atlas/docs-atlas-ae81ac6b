@@ -1,0 +1,469 @@
+---
+title: '1D Barcode Symbologies'
+description: 'Comprehensive guide to linear (1D) barcode symbologies supported by ZBar Advanced'
+icon: 'barcode'
+---
+
+## Overview
+
+ZBar Advanced supports a wide range of linear (1D) barcode symbologies commonly used in retail, logistics, healthcare, and industrial applications.
+
+## EAN/UPC Family
+
+### EAN-13
+
+**Format Specification:**
+- **Type:** 13-digit numeric
+- **Structure:** Country code (2-3 digits) + Manufacturer code + Product code + Check digit
+- **Check Digit:** Modulo 10
+- **Decoder:** ~/workspace/source/zbar/decoder/ean.c
+
+**Use Cases:**
+- International retail product identification
+- Point of sale (POS) systems
+- Inventory management
+- Supply chain tracking
+
+**Configuration Example:**
+
+```c
+// Enable EAN-13
+zbar_image_scanner_set_config(scanner, ZBAR_EAN13, ZBAR_CFG_ENABLE, 1);
+
+// Emit check digit in decoded data
+zbar_image_scanner_set_config(scanner, ZBAR_EAN13, ZBAR_CFG_EMIT_CHECK, 1);
+```
+
+### EAN-8
+
+**Format Specification:**
+- **Type:** 8-digit numeric
+- **Structure:** Country code (2-3 digits) + Product code + Check digit
+- **Check Digit:** Modulo 10
+- **Decoder:** ~/workspace/source/zbar/decoder/ean.c
+
+**Use Cases:**
+- Small package labeling
+- Cosmetics and pharmaceuticals
+- Cigarettes and tobacco products
+
+**Configuration Example:**
+
+```c
+// Enable EAN-8
+zbar_image_scanner_set_config(scanner, ZBAR_EAN8, ZBAR_CFG_ENABLE, 1);
+```
+
+### UPC-A
+
+**Format Specification:**
+- **Type:** 12-digit numeric
+- **Structure:** Number system + Manufacturer code (5) + Product code (5) + Check digit
+- **Check Digit:** Modulo 10
+- **Decoder:** ~/workspace/source/zbar/decoder/ean.c
+
+**Use Cases:**
+- Retail product identification (North America)
+- Grocery and general merchandise
+- POS systems
+
+**Configuration Example:**
+
+```c
+// Enable UPC-A
+zbar_image_scanner_set_config(scanner, ZBAR_UPCA, ZBAR_CFG_ENABLE, 1);
+```
+
+### UPC-E
+
+**Format Specification:**
+- **Type:** 6-digit compressed numeric (expands to 12)
+- **Structure:** Compressed manufacturer and product code + Check digit
+- **Check Digit:** Modulo 10
+- **Decoder:** ~/workspace/source/zbar/decoder/ean.c
+
+**Use Cases:**
+- Small retail items
+- Space-constrained packaging
+- Reduced label size requirements
+
+**Configuration Example:**
+
+```c
+// Enable UPC-E
+zbar_image_scanner_set_config(scanner, ZBAR_UPCE, ZBAR_CFG_ENABLE, 1);
+```
+
+### ISBN-10 and ISBN-13
+
+**Format Specification:**
+- **ISBN-10:** 10-digit numeric (legacy)
+- **ISBN-13:** 13-digit numeric (current standard, encoded as EAN-13)
+- **Prefix:** ISBN-13 uses 978 or 979 prefix
+- **Decoder:** ~/workspace/source/zbar/decoder/ean.c
+
+**Use Cases:**
+- Book identification and tracking
+- Library systems
+- Publishing and distribution
+- Retail book sales
+
+**Configuration Example:**
+
+```c
+// Enable ISBN-13 (requires EAN-13 to be enabled)
+zbar_image_scanner_set_config(scanner, ZBAR_ISBN13, ZBAR_CFG_ENABLE, 1);
+
+// Enable ISBN-10
+zbar_image_scanner_set_config(scanner, ZBAR_ISBN10, ZBAR_CFG_ENABLE, 1);
+```
+
+### EAN-2 and EAN-5 Add-ons
+
+**Format Specification:**
+- **EAN-2:** 2-digit supplemental
+- **EAN-5:** 5-digit supplemental
+- **Usage:** Extends EAN/UPC with additional information
+- **Decoder:** ~/workspace/source/zbar/decoder/ean.c
+
+**Use Cases:**
+- Magazine issue numbers (EAN-2)
+- Suggested retail price (EAN-5)
+- Book edition information (EAN-5)
+
+<Note>
+Add-ons are decoded as composite symbols (ZBAR_COMPOSITE) with separate components.
+</Note>
+
+## Code 128
+
+**Format Specification:**
+- **Type:** Variable-length alphanumeric
+- **Character Set:** Full ASCII (128 characters)
+- **Density:** High-density (11 bars/spaces per character)
+- **Code Sets:** A (uppercase + control), B (uppercase + lowercase), C (numeric pairs)
+- **Check Digit:** Modulo 103
+- **Decoder:** ~/workspace/source/zbar/decoder/code128.c
+
+**Structure:**
+- Start character (A, B, or C)
+- Data characters
+- Check digit
+- Stop pattern
+
+**Use Cases:**
+- Shipping and logistics (most common 1D symbology)
+- Supply chain management
+- Package tracking (UPS, FedEx)
+- GS1-128 (application identifiers)
+- Healthcare and laboratory
+
+**Configuration Example:**
+
+```c
+// Enable Code 128
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_ENABLE, 1);
+
+// Set minimum length
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_MIN_LEN, 4);
+
+// Set maximum length
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_MAX_LEN, 80);
+
+// Emit check digit
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_EMIT_CHECK, 1);
+```
+
+**GS1-128 Support:**
+
+```c
+const zbar_symbol_t *symbol = zbar_symbol_set_first_symbol(symbols);
+unsigned int modifiers = zbar_symbol_get_modifiers(symbol);
+
+if (modifiers & (1 << ZBAR_MOD_GS1)) {
+    // Symbol uses GS1 Application Identifiers
+    // FNC1 character indicates start of GS1 data
+}
+```
+
+Reference: ~/workspace/source/include/zbar.h:111, ~/workspace/source/zbar/decoder/code128.c:1
+
+## Code 93
+
+**Format Specification:**
+- **Type:** Variable-length alphanumeric
+- **Character Set:** 0-9, A-Z, space, and 7 special characters ($ / + % . -)
+- **Full ASCII:** Available via shift sequences
+- **Density:** More compact than Code 39
+- **Check Digits:** Two check characters (C and K)
+- **Decoder:** ~/workspace/source/zbar/decoder/code93.c
+
+**Structure:**
+- Start character (*)
+- Data characters
+- Check character C
+- Check character K
+- Stop character (*)
+- Termination bar
+
+**Use Cases:**
+- Canadian Post Office
+- Retail inventory management
+- Logistics and tracking
+- Electronics industry
+
+**Configuration Example:**
+
+```c
+// Enable Code 93
+zbar_image_scanner_set_config(scanner, ZBAR_CODE93, ZBAR_CFG_ENABLE, 1);
+
+// Enable full ASCII support
+zbar_image_scanner_set_config(scanner, ZBAR_CODE93, ZBAR_CFG_ASCII, 1);
+
+// Add check digits
+zbar_image_scanner_set_config(scanner, ZBAR_CODE93, ZBAR_CFG_ADD_CHECK, 1);
+
+// Emit check digits
+zbar_image_scanner_set_config(scanner, ZBAR_CODE93, ZBAR_CFG_EMIT_CHECK, 1);
+```
+
+Reference: ~/workspace/source/include/zbar.h:110, ~/workspace/source/zbar/decoder/code93.c:1
+
+## Code 39
+
+**Format Specification:**
+- **Type:** Variable-length alphanumeric
+- **Character Set:** 0-9, A-Z, space, and 8 special characters ($ / + % . - *)
+- **Full ASCII:** Available via shift pairs (requires ZBAR_CFG_ASCII)
+- **Density:** Low density, self-checking
+- **Check Digit:** Optional modulo 43
+- **Decoder:** ~/workspace/source/zbar/decoder/code39.c
+
+**Structure:**
+- Start character (*)
+- Data characters (each = 9 elements: 5 bars, 4 spaces)
+- Optional check digit
+- Stop character (*)
+
+**Use Cases:**
+- Automotive industry
+- Manufacturing and assembly
+- Healthcare (older systems)
+- Military and defense (LOGMARS)
+- Asset tracking
+
+**Configuration Example:**
+
+```c
+// Enable Code 39
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_ENABLE, 1);
+
+// Enable full ASCII support (optional)
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_ASCII, 1);
+
+// Add optional check digit
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_ADD_CHECK, 1);
+
+// Emit check digit
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_EMIT_CHECK, 1);
+
+// Set minimum length to avoid false positives
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_MIN_LEN, 3);
+```
+
+Reference: ~/workspace/source/include/zbar.h:106, ~/workspace/source/zbar/decoder/code39.c:1
+
+## Codabar
+
+**Format Specification:**
+- **Type:** Variable-length numeric with special characters
+- **Character Set:** 0-9, -, $, :, /, ., +
+- **Start/Stop:** A, B, C, D (not part of data)
+- **Density:** Low density
+- **Self-checking:** No check digit required
+- **Decoder:** ~/workspace/source/zbar/decoder/codabar.c
+
+**Structure:**
+- Start character (A, B, C, or D)
+- Data characters
+- Stop character (A, B, C, or D)
+
+**Use Cases:**
+- Blood banks and laboratories
+- Libraries and photo finishing
+- Overnight package delivery
+- FedEx airbills
+- Healthcare specimen tracking
+
+**Configuration Example:**
+
+```c
+// Enable Codabar
+zbar_image_scanner_set_config(scanner, ZBAR_CODABAR, ZBAR_CFG_ENABLE, 1);
+
+// Set minimum length
+zbar_image_scanner_set_config(scanner, ZBAR_CODABAR, ZBAR_CFG_MIN_LEN, 4);
+```
+
+Reference: ~/workspace/source/include/zbar.h:105, ~/workspace/source/zbar/decoder/codabar.c:1
+
+## Interleaved 2 of 5
+
+**Format Specification:**
+- **Type:** Numeric only (even number of digits)
+- **Character Set:** 0-9
+- **Encoding:** Pairs of digits (one in bars, one in spaces)
+- **Density:** High density
+- **Check Digit:** Optional modulo 10
+- **Decoder:** ~/workspace/source/zbar/decoder/i25.c
+
+**Structure:**
+- Start pattern (narrow bar, narrow space, narrow bar, narrow space)
+- Digit pairs (5 bars for first digit, 5 spaces for second digit)
+- Optional check digit
+- Stop pattern (wide bar, narrow space, narrow bar)
+
+**Use Cases:**
+- Warehouse and distribution
+- Industrial applications
+- ITF-14 (shipping containers)
+- Carton marking and case codes
+- Heavy industry
+
+**Configuration Example:**
+
+```c
+// Enable Interleaved 2 of 5
+zbar_image_scanner_set_config(scanner, ZBAR_I25, ZBAR_CFG_ENABLE, 1);
+
+// Add check digit
+zbar_image_scanner_set_config(scanner, ZBAR_I25, ZBAR_CFG_ADD_CHECK, 1);
+
+// Emit check digit
+zbar_image_scanner_set_config(scanner, ZBAR_I25, ZBAR_CFG_EMIT_CHECK, 1);
+
+// Set minimum length (recommended to avoid false positives)
+zbar_image_scanner_set_config(scanner, ZBAR_I25, ZBAR_CFG_MIN_LEN, 6);
+```
+
+<Warning>
+Interleaved 2 of 5 is prone to false positives. Always set ZBAR_CFG_MIN_LEN to a reasonable value (typically 6 or higher).
+</Warning>
+
+Reference: ~/workspace/source/include/zbar.h:102, ~/workspace/source/zbar/decoder/i25.c:1
+
+## GS1 DataBar (RSS)
+
+**Format Specification:**
+- **Type:** Numeric (GTIN-12, GTIN-13, GTIN-14) with optional AI data
+- **Variants:** 
+  - DataBar Omnidirectional
+  - DataBar Truncated
+  - DataBar Stacked
+  - DataBar Stacked Omnidirectional
+  - DataBar Limited
+  - DataBar Expanded
+  - DataBar Expanded Stacked
+- **Capacity:** 14 digits (base) + variable (expanded)
+- **Decoder:** ~/workspace/source/zbar/decoder/databar.c
+
+**Structure:**
+- Finder patterns
+- Data characters
+- Check digit (built-in)
+- Optional Application Identifier data (expanded variants)
+
+**Use Cases:**
+- Fresh food and produce (small items)
+- Healthcare (expiration dates, lot numbers)
+- Coupons and loyalty cards
+- Variable measure items (weight, quantity)
+- GS1 Application Identifiers (expanded)
+
+**Configuration Example:**
+
+```c
+// Enable GS1 DataBar
+zbar_image_scanner_set_config(scanner, ZBAR_DATABAR, ZBAR_CFG_ENABLE, 1);
+
+// Enable GS1 DataBar Expanded
+zbar_image_scanner_set_config(scanner, ZBAR_DATABAR_EXP, ZBAR_CFG_ENABLE, 1);
+```
+
+**GS1 Application Identifiers:**
+
+```c
+const zbar_symbol_t *symbol = zbar_symbol_set_first_symbol(symbols);
+unsigned int modifiers = zbar_symbol_get_modifiers(symbol);
+
+if (modifiers & (1 << ZBAR_MOD_GS1)) {
+    // DataBar Expanded with GS1 AI data
+    const char *data = zbar_symbol_get_data(symbol);
+    // Parse GS1 Application Identifiers from data
+}
+```
+
+Reference: ~/workspace/source/include/zbar.h:103-104, ~/workspace/source/zbar/decoder/databar.c:1
+
+## Comparison Matrix
+
+| Symbology | Character Set | Density | Check Digit | Typical Length | Best Use Case |
+|-----------|--------------|---------|-------------|----------------|---------------|
+| **EAN-13** | Numeric | High | Required | 13 | Retail products |
+| **EAN-8** | Numeric | High | Required | 8 | Small packages |
+| **UPC-A** | Numeric | High | Required | 12 | US/Canada retail |
+| **UPC-E** | Numeric | Very High | Required | 6 (compressed) | Small items |
+| **Code 128** | Full ASCII | Very High | Required | Variable | Shipping, logistics |
+| **Code 93** | Alphanumeric | High | Required | Variable | Retail, logistics |
+| **Code 39** | Alphanumeric | Low | Optional | Variable | Manufacturing |
+| **Codabar** | Numeric + special | Low | None | Variable | Blood banks, libraries |
+| **I25** | Numeric | High | Optional | Variable (even) | Warehouse, distribution |
+| **DataBar** | Numeric + AI | High | Built-in | Variable | Fresh produce, coupons |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Performance Optimization">
+    - Disable symbologies you don't need for faster scanning
+    - For retail environments, enable only EAN/UPC family
+    - For logistics, focus on Code 128 and DataBar
+    - Use minimum length constraints to reduce false positives
+  </Accordion>
+  
+  <Accordion title="Accuracy Improvement">
+    - Enable check digits for I25 and Code 39
+    - Set reasonable MIN_LEN values (especially for I25 and Code 39)
+    - Use ADD_CHECK configuration for optional check digits
+    - Enable EMIT_CHECK to validate check digit in your application
+  </Accordion>
+  
+  <Accordion title="Application-Specific Settings">
+    **Retail POS:**
+    - Enable: EAN-13, EAN-8, UPC-A, UPC-E
+    - Disable: All others
+    
+    **Shipping/Logistics:**
+    - Enable: Code 128, DataBar
+    - Configure: GS1 modifier detection
+    
+    **Manufacturing:**
+    - Enable: Code 39, Code 128
+    - Configure: ASCII support if needed
+    
+    **Healthcare:**
+    - Enable: Code 128, DataBar, Code 39
+    - Configure: Check digit validation
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="2D Barcodes" icon="qrcode" href="/symbologies/2d-codes">
+    QR Code and SQ Code documentation
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/symbologies/overview">
+    Symbology configuration options
+  </Card>
+</CardGroup>

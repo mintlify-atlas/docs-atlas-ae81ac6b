@@ -1,0 +1,763 @@
+---
+title: 'Qt Widget'
+description: 'ZBar barcode scanning widget for Qt4, Qt5, and Qt6 applications'
+---
+
+## Overview
+
+The ZBar Qt widget (`QZBar`) embeds a barcode reader directly into Qt-based GUI applications. It supports Qt4, Qt5, and Qt6, providing real-time video scanning and image-based barcode detection with native Qt signal/slot integration.
+
+<Note>
+The widget is compatible with Qt4, Qt5, and Qt6. The build system automatically detects your Qt version.
+</Note>
+
+## Features
+
+- **Video Scanning**: Real-time barcode detection from video devices
+- **Image Scanning**: Scan barcodes from QImage objects
+- **Qt Signals/Slots**: Native Qt integration for asynchronous events
+- **Drag & Drop**: Built-in support for dropping images to scan
+- **Camera Controls**: Access to camera device controls (exposure, brightness, etc.)
+- **Multi-threaded**: Background processing for smooth UI performance
+
+## Installation
+
+### Build Requirements
+
+```bash
+# Debian/Ubuntu (Qt5)
+sudo apt-get install qtbase5-dev libqt5x11extras5-dev pkg-config
+
+# Fedora (Qt5)
+sudo dnf install qt5-qtbase-devel qt5-qtx11extras-devel
+
+# For Qt6
+sudo apt-get install qt6-base-dev
+```
+
+### Compilation
+
+```bash
+./configure
+make
+```
+
+The build system automatically detects Qt4, Qt5, or Qt6.
+
+### Header Include
+
+```cpp
+#include <zbar/QZBar.h>
+```
+
+## Widget Creation
+
+### Creating the Widget
+
+```cpp
+#include <QApplication>
+#include <zbar/QZBar.h>
+
+zbar::QZBar *zbar_widget;
+
+// Create new ZBar Qt widget
+zbar_widget = new zbar::QZBar(parent);
+
+// Add to layout
+layout->addWidget(zbar_widget);
+```
+
+### Complete Example
+
+```cpp
+#include <QApplication>
+#include <QMainWindow>
+#include <QVBoxLayout>
+#include <zbar/QZBar.h>
+
+class BarcodeWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    BarcodeWindow(QWidget *parent = nullptr)
+        : QMainWindow(parent)
+    {
+        zbar_widget = new zbar::QZBar(this);
+        setCentralWidget(zbar_widget);
+        
+        // Connect signals
+        connect(zbar_widget, &zbar::QZBar::decoded,
+                this, &BarcodeWindow::onDecoded);
+        connect(zbar_widget, &zbar::QZBar::videoOpened,
+                this, &BarcodeWindow::onVideoOpened);
+        
+        // Set video device and enable scanning
+        zbar_widget->setVideoDevice("/dev/video0");
+        zbar_widget->setVideoEnabled(true);
+        
+        resize(640, 480);
+        setWindowTitle("ZBar Scanner");
+    }
+
+private slots:
+    void onDecoded(int type, const QString &data)
+    {
+        qDebug() << "Decoded:" << data;
+    }
+    
+    void onVideoOpened(bool opened)
+    {
+        if (opened) {
+            qDebug() << "Video device opened successfully";
+        } else {
+            qDebug() << "Video device closed";
+        }
+    }
+
+private:
+    zbar::QZBar *zbar_widget;
+};
+
+int main(int argc, char *argv[])
+{
+    QApplication app(argc, argv);
+    BarcodeWindow window;
+    window.show();
+    return app.exec();
+}
+```
+
+## Properties
+
+Qt properties accessible via standard property system:
+
+### videoDevice
+
+**Type**: `QString` (read/write)
+
+The currently opened video device path or name.
+
+```cpp
+// Get current device
+QString device = zbar_widget->videoDevice();
+
+// Set new device (opens asynchronously)
+zbar_widget->setVideoDevice("/dev/video0");
+
+// Close device
+zbar_widget->setVideoDevice("");
+```
+
+<Note>
+Opening a video device is asynchronous. Use the `videoOpened` signal to detect when the device is ready.
+</Note>
+
+### videoEnabled
+
+**Type**: `bool` (read/write)
+
+Video streaming state. Use to pause/resume scanning.
+
+```cpp
+// Enable video scanning
+zbar_widget->setVideoEnabled(true);
+
+// Pause scanning
+zbar_widget->setVideoEnabled(false);
+
+// Check state
+bool enabled = zbar_widget->isVideoEnabled();
+```
+
+### videoOpened
+
+**Type**: `bool` (read-only)
+
+Current opened state of the video device.
+
+```cpp
+// Check if device is opened
+bool opened = zbar_widget->isVideoOpened();
+
+if (opened) {
+    qDebug() << "Device is ready";
+}
+```
+
+## Signals
+
+### decoded
+
+Emitted when a barcode is successfully decoded.
+
+**Signature**:
+```cpp
+void decoded(int type, const QString &data);
+```
+
+**Parameters**:
+- `type`: Symbol type (zbar_symbol_type_t cast to int)
+- `data`: Decoded barcode data
+
+**Example**:
+```cpp
+connect(zbar_widget, &zbar::QZBar::decoded,
+        [](int type, const QString &data) {
+    switch (type) {
+        case ZBAR_QRCODE:
+            qDebug() << "QR Code:" << data;
+            break;
+        case ZBAR_EAN13:
+            qDebug() << "EAN-13:" << data;
+            break;
+        default:
+            qDebug() << "Barcode:" << data;
+    }
+});
+```
+
+### decodedText
+
+Emitted when a barcode is decoded, with the symbol type prefixed to the data.
+
+**Signature**:
+```cpp
+void decodedText(const QString &text);
+```
+
+**Parameters**:
+- `text`: Symbol type name and data, separated by colon (e.g., "QR-Code:Hello World")
+
+**Example**:
+```cpp
+connect(zbar_widget, &zbar::QZBar::decodedText,
+        [](const QString &text) {
+    qDebug() << "Scanned:" << text;
+});
+```
+
+### videoOpened
+
+Emitted when the video device is opened or closed.
+
+**Signature**:
+```cpp
+void videoOpened(bool opened);
+```
+
+**Parameters**:
+- `opened`: true if device opened, false if closed
+
+**Example**:
+```cpp
+connect(zbar_widget, &zbar::QZBar::videoOpened,
+        [this](bool opened) {
+    if (opened) {
+        statusBar()->showMessage("Camera ready");
+    } else {
+        statusBar()->showMessage("Camera closed");
+    }
+});
+```
+
+## Public Slots
+
+### setVideoDevice()
+
+Opens a new video device.
+
+```cpp
+void setVideoDevice(const QString &videoDevice);
+```
+
+**Parameters**:
+- `videoDevice`: Device path (Linux) or name (Windows). Empty string closes device.
+
+**Example**:
+```cpp
+// Linux
+zbar_widget->setVideoDevice("/dev/video0");
+
+// Windows
+zbar_widget->setVideoDevice("USB Camera");
+
+// Close
+zbar_widget->setVideoDevice("");
+```
+
+### setVideoEnabled()
+
+Enables or disables video scanning.
+
+```cpp
+void setVideoEnabled(bool videoEnabled = true);
+```
+
+**Parameters**:
+- `videoEnabled`: true to enable, false to pause
+
+**Example**:
+```cpp
+// Start scanning
+zbar_widget->setVideoEnabled(true);
+
+// Pause scanning
+zbar_widget->setVideoEnabled(false);
+```
+
+### scanImage()
+
+Scans a QImage for barcodes.
+
+```cpp
+void scanImage(const QImage &image);
+```
+
+**Parameters**:
+- `image`: QImage to scan
+
+**Example**:
+```cpp
+QImage image("barcode.png");
+if (!image.isNull()) {
+    zbar_widget->scanImage(image);
+}
+```
+
+The `decoded` and `decodedText` signals will be emitted for any barcodes found.
+
+## Advanced Methods
+
+### Camera Controls
+
+Access and modify camera device controls:
+
+#### get_controls()
+
+Enumerate available camera controls.
+
+```cpp
+int get_controls(int index, 
+                char **name = NULL,
+                char **group = NULL,
+                enum ControlType *type = NULL,
+                int *min = NULL,
+                int *max = NULL,
+                int *def = NULL,
+                int *step = NULL);
+```
+
+**Example**:
+```cpp
+char *name, *group;
+zbar::QZBar::ControlType type;
+int min, max, def, step;
+
+for (int i = 0; ; i++) {
+    if (!zbar_widget->get_controls(i, &name, &group, &type,
+                                   &min, &max, &def, &step))
+        break;
+    
+    qDebug() << "Control:" << name
+             << "Range:" << min << "-" << max
+             << "Default:" << def;
+}
+```
+
+#### set_control()
+
+Set a camera control value.
+
+```cpp
+int set_control(char *name, int value);
+int set_control(char *name, bool value);
+```
+
+**Example**:
+```cpp
+// Set brightness
+zbar_widget->set_control("brightness", 128);
+
+// Enable auto exposure
+zbar_widget->set_control("auto_exposure", true);
+```
+
+#### get_control()
+
+Get current control value.
+
+```cpp
+int get_control(char *name, int *value);
+int get_control(char *name, bool *value);
+```
+
+**Example**:
+```cpp
+int brightness;
+if (zbar_widget->get_control("brightness", &brightness) == 0) {
+    qDebug() << "Current brightness:" << brightness;
+}
+```
+
+### Resolution Control
+
+#### request_size()
+
+Request specific video resolution.
+
+```cpp
+void request_size(unsigned width, unsigned height, bool trigger = true);
+```
+
+**Parameters**:
+- `width`: Desired width in pixels
+- `height`: Desired height in pixels
+- `trigger`: If true, reopens device to apply resolution
+
+**Example**:
+```cpp
+// Request 1280x720 before opening
+zbar_widget->request_size(1280, 720, false);
+zbar_widget->setVideoDevice("/dev/video0");
+
+// Or change and reopen
+zbar_widget->request_size(1920, 1080, true);
+```
+
+#### get_resolution()
+
+Get available resolutions from device.
+
+```cpp
+int get_resolution(int index,
+                  unsigned &width,
+                  unsigned &height,
+                  float &max_fps);
+```
+
+**Example**:
+```cpp
+unsigned width, height;
+float fps;
+
+qDebug() << "Available resolutions:";
+for (int i = 0; ; i++) {
+    if (!zbar_widget->get_resolution(i, width, height, fps))
+        break;
+    
+    qDebug() << width << "x" << height << "@" << fps << "fps";
+}
+```
+
+### Scanner Configuration
+
+#### set_config()
+
+Configure barcode scanner settings.
+
+```cpp
+int set_config(std::string cfgstr);
+int set_config(zbar_symbol_type_t symbology,
+              zbar_config_t config,
+              int value);
+```
+
+**Example**:
+```cpp
+// Enable QR codes only
+zbar_widget->set_config(ZBAR_NONE, ZBAR_CFG_ENABLE, 0);
+zbar_widget->set_config(ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+
+// Set minimum barcode quality
+zbar_widget->set_config(ZBAR_NONE, ZBAR_CFG_MIN_LEN, 5);
+```
+
+#### get_config()
+
+Retrieve scanner configuration.
+
+```cpp
+int get_config(zbar_symbol_type_t symbology,
+              zbar_config_t config,
+              int &value);
+```
+
+**Example**:
+```cpp
+int enabled;
+if (zbar_widget->get_config(ZBAR_QRCODE, ZBAR_CFG_ENABLE, enabled) == 0) {
+    qDebug() << "QR codes enabled:" << (enabled ? "yes" : "no");
+}
+```
+
+### D-Bus Integration
+
+#### request_dbus()
+
+Enable D-Bus notifications for decoded barcodes.
+
+```cpp
+int request_dbus(bool enabled);
+```
+
+**Example**:
+```cpp
+// Enable D-Bus broadcasting
+zbar_widget->request_dbus(true);
+```
+
+## Drag & Drop Support
+
+The widget has built-in drag & drop support for images:
+
+```cpp
+// Drag & drop is automatically enabled
+// Drop an image file or image data onto the widget to scan it
+
+// The widget handles:
+// - Image data from clipboard
+// - File URLs (image files)
+// - Direct QImage data
+```
+
+**Example**: User can drag an image file from file manager directly onto the widget, and it will be scanned automatically.
+
+## Video Device Support
+
+### Linux (Video4Linux)
+
+Use V4L2 device paths:
+
+```cpp
+zbar_widget->setVideoDevice("/dev/video0");
+zbar_widget->setVideoDevice("/dev/video1");
+```
+
+### Windows
+
+Use DirectShow device names:
+
+```cpp
+zbar_widget->setVideoDevice("USB Camera");
+zbar_widget->setVideoDevice("Integrated Webcam");
+```
+
+### macOS
+
+Use AVFoundation device names or indices:
+
+```cpp
+zbar_widget->setVideoDevice("FaceTime HD Camera");
+```
+
+## Complete Application Example
+
+```cpp
+#include <QApplication>
+#include <QMainWindow>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QLabel>
+#include <QComboBox>
+#include <QFileDialog>
+#include <zbar/QZBar.h>
+
+class ScannerWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    ScannerWindow(QWidget *parent = nullptr)
+        : QMainWindow(parent)
+    {
+        setupUI();
+        setupConnections();
+    }
+
+private:
+    void setupUI()
+    {
+        auto *central = new QWidget(this);
+        auto *mainLayout = new QVBoxLayout(central);
+        
+        // ZBar widget
+        zbar_widget = new zbar::QZBar(this);
+        mainLayout->addWidget(zbar_widget);
+        
+        // Controls
+        auto *controlLayout = new QHBoxLayout();
+        
+        deviceCombo = new QComboBox(this);
+        deviceCombo->addItem("/dev/video0");
+        deviceCombo->addItem("/dev/video1");
+        controlLayout->addWidget(deviceCombo);
+        
+        startButton = new QPushButton("Start", this);
+        stopButton = new QPushButton("Stop", this);
+        scanFileButton = new QPushButton("Scan File...", this);
+        
+        controlLayout->addWidget(startButton);
+        controlLayout->addWidget(stopButton);
+        controlLayout->addWidget(scanFileButton);
+        
+        mainLayout->addLayout(controlLayout);
+        
+        // Status label
+        statusLabel = new QLabel("Ready", this);
+        mainLayout->addWidget(statusLabel);
+        
+        setCentralWidget(central);
+        resize(800, 600);
+        setWindowTitle("ZBar Scanner");
+    }
+    
+    void setupConnections()
+    {
+        connect(zbar_widget, &zbar::QZBar::decoded,
+                this, &ScannerWindow::onDecoded);
+        connect(zbar_widget, &zbar::QZBar::videoOpened,
+                this, &ScannerWindow::onVideoOpened);
+        
+        connect(startButton, &QPushButton::clicked, [this]() {
+            zbar_widget->setVideoDevice(deviceCombo->currentText());
+            zbar_widget->setVideoEnabled(true);
+        });
+        
+        connect(stopButton, &QPushButton::clicked, [this]() {
+            zbar_widget->setVideoEnabled(false);
+        });
+        
+        connect(scanFileButton, &QPushButton::clicked,
+                this, &ScannerWindow::scanFile);
+    }
+
+private slots:
+    void onDecoded(int type, const QString &data)
+    {
+        statusLabel->setText(QString("Decoded: %1").arg(data));
+    }
+    
+    void onVideoOpened(bool opened)
+    {
+        startButton->setEnabled(!opened);
+        stopButton->setEnabled(opened);
+        
+        if (opened) {
+            statusLabel->setText("Scanning...");
+        } else {
+            statusLabel->setText("Stopped");
+        }
+    }
+    
+    void scanFile()
+    {
+        QString filename = QFileDialog::getOpenFileName(
+            this, "Select Image",
+            QString(),
+            "Images (*.png *.jpg *.jpeg *.bmp)");
+        
+        if (!filename.isEmpty()) {
+            QImage image(filename);
+            if (!image.isNull()) {
+                zbar_widget->scanImage(image);
+            }
+        }
+    }
+
+private:
+    zbar::QZBar *zbar_widget;
+    QComboBox *deviceCombo;
+    QPushButton *startButton;
+    QPushButton *stopButton;
+    QPushButton *scanFileButton;
+    QLabel *statusLabel;
+};
+
+int main(int argc, char *argv[])
+{
+    QApplication app(argc, argv);
+    ScannerWindow window;
+    window.show();
+    return app.exec();
+}
+```
+
+## Qt Designer Integration
+
+The QZBar widget can be promoted in Qt Designer:
+
+1. Add a QWidget to your form
+2. Right-click and select "Promote to..."
+3. Set:
+   - Base class: `QWidget`
+   - Promoted class name: `zbar::QZBar`
+   - Header file: `zbar/QZBar.h`
+4. Click "Add" and "Promote"
+
+Then connect signals in your code as usual.
+
+## Troubleshooting
+
+### Video Device Won't Open
+
+Check permissions:
+```bash
+# Linux: Add user to video group
+sudo usermod -a -G video $USER
+
+# Check device
+ls -l /dev/video0
+```
+
+### Blank Widget or No Display
+
+Ensure proper Qt version linking and X11 support:
+```bash
+# Check Qt X11 extras (Qt5)
+pkg-config --modversion Qt5X11Extras
+```
+
+### No Signals Received
+
+Verify signal/slot connections:
+```cpp
+// Use Qt5 connect syntax for compile-time checking
+connect(zbar_widget, &zbar::QZBar::decoded,
+        this, &MyClass::onDecoded);
+```
+
+### Performance Issues
+
+Reduce resolution:
+```cpp
+zbar_widget->request_size(640, 480);
+```
+
+Enable only needed symbologies:
+```cpp
+zbar_widget->set_config(ZBAR_NONE, ZBAR_CFG_ENABLE, 0);
+zbar_widget->set_config(ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+```
+
+## Thread Safety
+
+The QZBar widget uses internal threading for video processing. All public methods are thread-safe and can be called from the main GUI thread. Signals are emitted in the GUI thread context.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Video API" icon="video" href="/api/video">
+    Low-level video capture interface
+  </Card>
+  <Card title="Image Scanner" icon="camera" href="/api/image-scanner">
+    Core scanning functionality
+  </Card>
+  <Card title="GTK Widget" icon="window" href="/api/gtk-widget">
+    GTK+ framework widget
+  </Card>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Scanner configuration guide
+  </Card>
+</CardGroup>

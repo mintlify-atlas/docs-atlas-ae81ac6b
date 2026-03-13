@@ -1,0 +1,162 @@
+---
+title: "Core API Overview"
+description: "Architecture overview of the ZBar C API, including API layers and common patterns"
+---
+
+## Introduction
+
+The ZBar Barcode Reader provides a flexible C API organized into three distinct layers, each serving different use cases and providing different levels of control and abstraction.
+
+## API Layers
+
+### High-Level Interfaces
+
+These interfaces wrap all library functionality into easy-to-use packages:
+
+- **Processor** - Adds a scanning window to applications with no GUI. Handles video capture, decoding, and display in a single integrated interface.
+- **GTK+ 2.x Widget** - For GTK GUI applications (Python wrapper included for PyGtk)
+- **Qt4 Widget** - For Qt GUI applications
+
+**Best for:** Quick integration, video streaming applications, interactive scanning
+
+### Mid-Level Interfaces
+
+Building blocks for constructing custom scanning solutions:
+
+- **ImageScanner** - Scans library-defined image objects for barcodes
+- **Window** - Displays library images on platform-specific output windows
+- **Video** - Captures library images from video devices
+
+**Best for:** Custom workflows, image processing pipelines, non-standard video sources
+
+### Low-Level Interfaces
+
+Direct interaction with barcode scanning and decoding:
+
+- **Scanner** - Processes linear intensity sample streams to detect barcodes
+- **Decoder** - Extracts barcodes from streams of bar and space widths
+
+**Best for:** Embedded systems, custom image formats, performance optimization
+
+## Common Patterns
+
+### Object Lifecycle
+
+All ZBar objects follow a consistent lifecycle pattern:
+
+```c
+// 1. Create object
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+
+// 2. Configure object
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+
+// 3. Use object
+zbar_scan_image(scanner, image);
+
+// 4. Destroy object
+zbar_image_scanner_destroy(scanner);
+```
+
+### Reference Counting
+
+Symbols and images use reference counting for memory management:
+
+```c
+// Increment reference when storing
+zbar_symbol_ref(symbol, 1);
+
+// Decrement when done
+zbar_symbol_ref(symbol, -1);
+```
+
+<Note>
+The containing image holds a reference to symbols. Only use reference counting if you keep symbols after the image is destroyed or reused.
+</Note>
+
+### Configuration System
+
+The configuration system uses three parameters:
+
+1. **Symbology** - Which barcode type (or 0 for all)
+2. **Config** - What to configure (enable, min length, etc.)
+3. **Value** - The setting value
+
+```c
+// Enable QR codes
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+
+// Set minimum data length for Code 128
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_MIN_LEN, 6);
+
+// Parse configuration string
+zbar_parse_config("qrcode.enable=1", &symbology, &config, &value);
+```
+
+### Error Handling
+
+Most functions return status codes:
+
+- **Positive values** - Success (often count of decoded symbols)
+- **Zero** - No results or false
+- **Negative values** - Error occurred
+
+```c
+int n = zbar_scan_image(scanner, image);
+if (n < 0) {
+    // Handle error
+    fprintf(stderr, "Error: %s\n", 
+            zbar_image_scanner_error_string(scanner, 0));
+}
+```
+
+### Result Iteration
+
+Results are iterated using linked-list style traversal:
+
+```c
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+for (; symbol; symbol = zbar_symbol_next(symbol)) {
+    zbar_symbol_type_t type = zbar_symbol_get_type(symbol);
+    const char *data = zbar_symbol_get_data(symbol);
+    printf("Found %s: %s\n", zbar_get_symbol_name(type), data);
+}
+```
+
+## Supported Image Formats
+
+ZBar processes images in specific formats:
+
+- **Y800/GRAY** - 8-bit grayscale (required for scanning)
+- **RGB/BGR** - Color formats (must be converted)
+- **YUV formats** - Video capture formats
+
+Use `zbar_image_convert()` to convert between formats:
+
+```c
+zbar_image_t *gray = zbar_image_convert(color_image, 
+                                        zbar_fourcc('Y','8','0','0'));
+```
+
+## Threading Considerations
+
+- The **Processor** interface supports threaded operation when created with `threaded=1`
+- Most other interfaces are **not thread-safe** by default
+- Use appropriate locking when accessing objects from multiple threads
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ImageScanner" icon="camera" href="/api/image-scanner">
+    Learn about the mid-level image scanning interface
+  </Card>
+  <Card title="Processor" icon="display" href="/api/processor">
+    Explore the high-level processor interface
+  </Card>
+  <Card title="Decoder" icon="barcode" href="/api/decoder">
+    Understand low-level barcode decoding
+  </Card>
+  <Card title="Symbols" icon="tag" href="/api/symbols">
+    Work with decoded symbol results
+  </Card>
+</CardGroup>

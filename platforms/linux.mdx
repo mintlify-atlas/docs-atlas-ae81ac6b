@@ -1,0 +1,345 @@
+---
+title: Linux
+description: Build and use ZBar Advanced on Linux systems
+---
+
+ZBar Advanced provides comprehensive support for Linux platforms through the Video4Linux2 (V4L2) API for camera access and standard build tools.
+
+## System Requirements
+
+### Kernel Version
+
+Linux kernel **3.16 or higher** is recommended for full V4L2 support. While older kernels may work, you may experience limited camera compatibility.
+
+### Required Dependencies
+
+<Tabs>
+  <Tab title="Debian/Ubuntu">
+    ```bash
+    sudo apt-get install -y \
+      autoconf autopoint pkg-config libtool gcc make \
+      libdbus-1-dev libv4l-dev
+    ```
+  </Tab>
+  <Tab title="Red Hat/Fedora/CentOS">
+    ```bash
+    sudo yum install -y \
+      autoconf automake libtool pkgconfig gcc make \
+      dbus-devel libv4l-devel
+    ```
+  </Tab>
+  <Tab title="Arch Linux">
+    ```bash
+    sudo pacman -S --noconfirm \
+      autoconf automake libtool pkgconf gcc make \
+      dbus v4l-utils
+    ```
+  </Tab>
+</Tabs>
+
+## Video4Linux Support
+
+### V4L2 API
+
+ZBar uses the Video4Linux2 API (`linux/videodev2.h`) to access camera devices. The `zbarcam` program requires V4L2 support to scan from video devices.
+
+### libv4l
+
+**Installing libv4l is highly recommended** for broader camera support:
+
+<Tabs>
+  <Tab title="Debian/Ubuntu">
+    ```bash
+    sudo apt-get install libv4l-dev
+    ```
+  </Tab>
+  <Tab title="Red Hat/Fedora">
+    ```bash
+    sudo yum install libv4l-devel
+    ```
+  </Tab>
+  <Tab title="Arch Linux">
+    ```bash
+    sudo pacman -S v4l-utils
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+Without libv4l, some cameras may not be recognized or may produce incorrect video formats. libv4l provides automatic format conversion and device compatibility.
+</Note>
+
+## Building from Source
+
+### Basic Build
+
+```bash
+autoreconf -vfi
+./configure
+make
+sudo make install
+```
+
+### Build Configuration Options
+
+<AccordionGroup>
+  <Accordion title="Video Support">
+    ```bash
+    # Disable video scanning (no zbarcam)
+    ./configure --disable-video
+    ```
+  </Accordion>
+
+  <Accordion title="Threading Support">
+    ```bash
+    # Enable pthread support (recommended for multi-threaded apps)
+    ./configure --enable-pthread
+    
+    # Disable pthread support
+    ./configure --disable-pthread
+    ```
+  </Accordion>
+
+  <Accordion title="GUI Widgets">
+    ```bash
+    # GTK+ support (auto-detect latest version)
+    ./configure --with-gtk=auto
+    
+    # Specific GTK version
+    ./configure --with-gtk=gtk3
+    ./configure --with-gtk=gtk2
+    
+    # Disable GTK
+    ./configure --without-gtk
+    
+    # Qt support
+    ./configure --with-qt
+    ./configure --without-qt
+    ```
+  </Accordion>
+
+  <Accordion title="Language Bindings">
+    ```bash
+    # Python (auto-detect latest version)
+    ./configure --with-python=auto
+    
+    # Specific Python version
+    ./configure --with-python=python3
+    ./configure --with-python=python2
+    
+    # Java bindings
+    ./configure --with-java
+    
+    # Disable Python
+    ./configure --without-python
+    ```
+  </Accordion>
+
+  <Accordion title="Image Format Support">
+    ```bash
+    # JPEG support
+    ./configure --with-jpeg
+    ./configure --without-jpeg
+    
+    # ImageMagick (for zbarimg)
+    ./configure --with-imagemagick
+    ./configure --without-imagemagick
+    
+    # GraphicsMagick (alternative to ImageMagick)
+    ./configure --with-graphicsmagick
+    ```
+  </Accordion>
+
+  <Accordion title="DBus Integration">
+    ```bash
+    # Enable DBus support
+    ./configure --with-dbus
+    
+    # Disable DBus
+    ./configure --without-dbus
+    ```
+  </Accordion>
+
+  <Accordion title="Barcode Symbologies">
+    ```bash
+    # Select specific symbologies (default: all)
+    ./configure --enable-codes=ean,code128,code39,qrcode
+    
+    # Available codes:
+    # ean, databar, code128, code93, code39, codabar, i25, qrcode, sqcode
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Complete Build Example
+
+```bash
+# Full-featured build with GTK3 and Python3
+autoreconf -vfi
+./configure \
+  --with-gtk=gtk3 \
+  --with-python=python3 \
+  --enable-pthread \
+  --with-qt \
+  --with-java \
+  --with-dbus
+make
+sudo make install
+```
+
+## Camera Access
+
+### Device Permissions
+
+To access video devices, your user must have permissions:
+
+```bash
+# Add user to video group
+sudo usermod -a -G video $USER
+
+# Log out and back in for changes to take effect
+```
+
+### Listing Available Cameras
+
+```bash
+# List V4L2 devices
+v4l2-ctl --list-devices
+
+# Get device capabilities
+v4l2-ctl -d /dev/video0 --all
+```
+
+## Running the Applications
+
+### zbarcam (Video Scanner)
+
+```bash
+# Use default camera
+zbarcam
+
+# Specify camera device
+zbarcam /dev/video0
+
+# With custom resolution
+zbarcam --width=1920 --height=1080
+```
+
+### zbarimg (Image Scanner)
+
+```bash
+# Scan image file
+zbarimg barcode.png
+
+# Scan multiple files
+zbarimg *.jpg
+
+# Output raw data only
+zbarimg --raw barcode.png
+```
+
+## DBus Integration
+
+ZBar can send scanned codes via DBus for integration with other applications.
+
+### Testing DBus
+
+```bash
+# Monitor ZBar DBus events
+dbus-monitor --system interface=org.linuxtv.Zbar1.Code
+
+# In another terminal, scan a barcode
+zbarimg examples/code-128.png
+```
+
+### DBus Configuration
+
+The DBus configuration file is installed to:
+```
+/etc/dbus-1/system.d/
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Camera not detected">
+    - Ensure V4L2 kernel support: `lsmod | grep videodev`
+    - Check device exists: `ls -l /dev/video*`
+    - Verify permissions: `groups $USER` (should include `video`)
+    - Install libv4l: `sudo apt-get install libv4l-dev`
+  </Accordion>
+
+  <Accordion title="Build failures">
+    - Install all dependencies listed above
+    - Check autoconf version: `autoconf --version` (need 2.68+)
+    - Clear build artifacts: `make clean && make distclean`
+    - Run `autoreconf -vfi` again
+  </Accordion>
+
+  <Accordion title="Camera shows incorrect colors">
+    This usually indicates missing libv4l support:
+    ```bash
+    sudo apt-get install libv4l-dev
+    ./configure --with-libv4l
+    make clean && make
+    ```
+  </Accordion>
+
+  <Accordion title="Python bindings not found">
+    ```bash
+    # Ensure Python development headers are installed
+    sudo apt-get install python3-dev
+    
+    # Configure with explicit Python path
+    ./configure --with-python=python3 PYTHON=/usr/bin/python3
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Distribution Packages
+
+Pre-built packages are available for some distributions:
+
+<Tabs>
+  <Tab title="Debian/Ubuntu">
+    ```bash
+    # Install from repositories
+    sudo apt-get install zbar-tools libzbar0 libzbar-dev
+    
+    # Or from pre-built binaries
+    wget https://linuxtv.org/downloads/zbar/binaries/zbar-<version>-ubuntu.deb
+    sudo dpkg -i zbar-<version>-ubuntu.deb
+    ```
+  </Tab>
+  <Tab title="Fedora/RHEL">
+    ```bash
+    sudo yum install zbar zbar-devel
+    ```
+  </Tab>
+  <Tab title="Arch Linux">
+    ```bash
+    sudo pacman -S zbar
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+Distribution packages may not include the latest features. Building from source ensures you have the most recent version with all capabilities.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Start scanning barcodes
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Integrate into your application
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Customize scanner behavior
+  </Card>
+  <Card title="Examples" icon="book" href="/quickstart">
+    See code examples
+  </Card>
+</CardGroup>

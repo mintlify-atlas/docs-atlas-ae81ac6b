@@ -1,0 +1,701 @@
+---
+title: Video Interface
+description: Video capture abstraction for acquiring images from video devices
+---
+
+The Video interface provides mid-level abstraction for capturing images from video devices such as webcams. It handles platform-specific video APIs including V4L2 (Linux), Video for Windows (VfW), and DirectShow (Windows).
+
+## Overview
+
+The video interface:
+- Opens and probes video devices
+- Negotiates image formats
+- Captures video frames as zbar_image_t objects
+- Provides device control management (brightness, contrast, etc.)
+- Supports multiple I/O modes (read, mmap, USERPTR)
+
+## Basic Usage
+
+```c
+zbar_video_t *video = zbar_video_create();
+zbar_video_open(video, "/dev/video0");
+zbar_video_request_size(video, 640, 480);
+zbar_video_init(video, zbar_fourcc('Y','8','0','0'));
+zbar_video_enable(video, 1);
+
+zbar_image_t *image = zbar_video_next_image(video);
+// ... process image ...
+
+zbar_video_enable(video, 0);
+zbar_video_destroy(video);
+```
+
+## Type Definitions
+
+### zbar_video_t
+
+Opaque video object that manages video device access and frame capture.
+
+### video_control_type_t
+
+Enumerates video control types:
+
+| Value | Description |
+|-------|-------------|
+| `VIDEO_CNTL_INTEGER` | Integer-valued control |
+| `VIDEO_CNTL_MENU` | Menu selection control |
+| `VIDEO_CNTL_BUTTON` | Button/action control |
+| `VIDEO_CNTL_INTEGER64` | 64-bit integer control |
+| `VIDEO_CNTL_STRING` | String-valued control |
+| `VIDEO_CNTL_BOOLEAN` | Boolean on/off control |
+
+### video_controls_t
+
+Structure representing a video device control:
+
+```c
+typedef struct video_controls_s {
+    char *name;                    // Control name
+    char *group;                   // Control group/class
+    video_control_type_t type;     // Control type
+    int64_t min, max, def;        // Min, max, default values
+    uint64_t step;                 // Increment step
+    unsigned int menu_size;        // Size of menu array
+    video_control_menu_t *menu;    // Menu items (for menu type)
+    void *next;                    // Next control in list
+} video_controls_t;
+```
+
+**Since:** 0.20
+
+### video_resolution_s
+
+Structure representing an available video resolution:
+
+```c
+struct video_resolution_s {
+    unsigned int width;   // Width in pixels
+    unsigned int height;  // Height in pixels
+    float max_fps;        // Maximum frame rate
+};
+```
+
+**Since:** 0.22
+
+## Functions
+
+### zbar_video_create
+
+```c
+zbar_video_t *zbar_video_create(void)
+```
+
+Constructor for video objects.
+
+**Returns:** New video object, or NULL on allocation failure
+
+---
+
+### zbar_video_destroy
+
+```c
+void zbar_video_destroy(zbar_video_t *video)
+```
+
+Destructor. Closes video device and cleans up all resources.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object to destroy
+</ParamField>
+
+---
+
+### zbar_video_open
+
+```c
+int zbar_video_open(zbar_video_t *video, const char *device)
+```
+
+Open and probe a video device.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="device" type="const char*">
+  Platform-specific device identifier:
+  - Linux: V4L2 device node path (e.g., "/dev/video0")
+  - Windows: DirectShow DevicePath property
+  - Pass NULL to close the device
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+<Note>
+On Linux, a 3.16 kernel or higher is recommended for full V4L2 support.
+</Note>
+
+---
+
+### zbar_video_get_fd
+
+```c
+int zbar_video_get_fd(const zbar_video_t *video)
+```
+
+Retrieve file descriptor for opened video device. Useful for `select()`/`poll()` to detect when new frames are available.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+**Returns:** File descriptor, or -1 if device is not open or driver only supports V4L1
+
+<Warning>
+Only works with V4L2 drivers on Linux. Not supported on Windows or V4L1 drivers.
+</Warning>
+
+---
+
+### zbar_video_request_size
+
+```c
+int zbar_video_request_size(zbar_video_t *video,
+                           unsigned width,
+                           unsigned height)
+```
+
+Request preferred video image size from the device. The request may be adjusted or ignored by the driver.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="width" type="unsigned">
+  Requested width in pixels
+</ParamField>
+
+<ParamField path="height" type="unsigned">
+  Requested height in pixels
+</ParamField>
+
+**Returns:** 0 on success, -1 if device is already initialized
+
+<Note>
+Must be called before `zbar_video_open()` or `zbar_video_init()`.
+</Note>
+
+**Since:** 0.6
+
+---
+
+### zbar_video_request_interface
+
+```c
+int zbar_video_request_interface(zbar_video_t *video, int version)
+```
+
+Request preferred driver interface version for debug/testing.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="version" type="int">
+  Interface version (1 for V4L1, 2 for V4L2)
+</ParamField>
+
+**Returns:** 0 on success, -1 if device is already opened
+
+<Note>
+Must be called before `zbar_video_open()`.
+</Note>
+
+**Since:** 0.6
+
+---
+
+### zbar_video_request_iomode
+
+```c
+int zbar_video_request_iomode(zbar_video_t *video, int iomode)
+```
+
+Request preferred I/O mode for debug/testing. Errors occur if the driver does not support the specified mode.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="iomode" type="int">
+  I/O mode:
+  - `0` - Auto-detect (default)
+  - `1` - Force I/O using `read()`
+  - `2` - Force memory-mapped I/O using `mmap()`
+  - `3` - Force USERPTR I/O (V4L2 only)
+</ParamField>
+
+**Returns:** 0 on success, -1 if device is already opened or invalid mode
+
+<Note>
+Must be called before `zbar_video_open()`.
+</Note>
+
+**Since:** 0.7
+
+---
+
+### zbar_video_get_width
+
+```c
+int zbar_video_get_width(const zbar_video_t *video)
+```
+
+Retrieve current output image width.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+**Returns:** Width in pixels, or 0 if device is not open
+
+---
+
+### zbar_video_get_height
+
+```c
+int zbar_video_get_height(const zbar_video_t *video)
+```
+
+Retrieve current output image height.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+**Returns:** Height in pixels, or 0 if device is not open
+
+---
+
+### zbar_video_init
+
+```c
+int zbar_video_init(zbar_video_t *video, unsigned long format)
+```
+
+Initialize video using a specific format. For automatic format selection, use `zbar_negotiate_format()` instead.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="format" type="unsigned long">
+  FourCC format code (use `zbar_fourcc()` macro to create)
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+**Example:**
+```c
+// Initialize with Y800 (grayscale) format
+zbar_video_init(video, zbar_fourcc('Y','8','0','0'));
+```
+
+---
+
+### zbar_video_enable
+
+```c
+int zbar_video_enable(zbar_video_t *video, int enable)
+```
+
+Start or stop video capture. All buffered images are retired when capture is disabled.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="enable" type="int">
+  1 to start capture, 0 to stop
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+---
+
+### zbar_video_next_image
+
+```c
+zbar_image_t *zbar_video_next_image(zbar_video_t *video)
+```
+
+Retrieve next captured image. Blocks until an image is available.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+**Returns:** Image object, or NULL if video is not enabled or error occurs
+
+<Note>
+The returned image must be released with `zbar_image_destroy()` when finished.
+</Note>
+
+---
+
+### zbar_video_set_control
+
+```c
+int zbar_video_set_control(zbar_video_t *video,
+                          const char *control_name,
+                          int value)
+```
+
+Set video control value (e.g., brightness, contrast, saturation).
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="control_name" type="const char*">
+  Name of the control (device-specific, typically V4L2 control name)
+</ParamField>
+
+<ParamField path="value" type="int">
+  New value for the control
+</ParamField>
+
+**Returns:** 0 on success, non-zero on failure
+
+**Example:**
+```c
+zbar_video_set_control(video, "brightness", 128);
+zbar_video_set_control(video, "contrast", 64);
+```
+
+**Since:** 0.20
+
+---
+
+### zbar_video_get_control
+
+```c
+int zbar_video_get_control(zbar_video_t *video,
+                          const char *control_name,
+                          int *value)
+```
+
+Get video control value.
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="control_name" type="const char*">
+  Name of the control
+</ParamField>
+
+<ParamField path="value" type="int*">
+  Pointer to store the retrieved value
+</ParamField>
+
+**Returns:** 0 on success, non-zero on failure
+
+**Since:** 0.20
+
+---
+
+### zbar_video_get_controls
+
+```c
+struct video_controls_s *zbar_video_get_controls(const zbar_video_t *video,
+                                                 int index)
+```
+
+Get available controls from video source by index.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="index" type="int">
+  Zero-based index of control to retrieve
+</ParamField>
+
+**Returns:** Pointer to control structure, or NULL if index is out of range
+
+**Example:**
+```c
+int i = 0;
+video_controls_t *ctrl;
+while ((ctrl = zbar_video_get_controls(video, i++)) != NULL) {
+    printf("Control: %s (type: %d)\n", ctrl->name, ctrl->type);
+    if (ctrl->type == VIDEO_CNTL_INTEGER) {
+        printf("  Range: %ld to %ld, default: %ld\n",
+               ctrl->min, ctrl->max, ctrl->def);
+    }
+}
+```
+
+**Since:** 0.20
+
+---
+
+### zbar_video_get_resolutions
+
+```c
+struct video_resolution_s *zbar_video_get_resolutions(const zbar_video_t *video,
+                                                      int index)
+```
+
+Get available video resolutions from video source by index.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="index" type="int">
+  Zero-based index of resolution to retrieve
+</ParamField>
+
+**Returns:** Pointer to resolution structure, or NULL if index is out of range
+
+**Example:**
+```c
+int i = 0;
+video_resolution_s *res;
+while ((res = zbar_video_get_resolutions(video, i++)) != NULL) {
+    printf("Resolution: %dx%d @ %.1f fps\n",
+           res->width, res->height, res->max_fps);
+}
+```
+
+**Since:** 0.22
+
+---
+
+### zbar_negotiate_format
+
+```c
+int zbar_negotiate_format(zbar_video_t *video, zbar_window_t *window)
+```
+
+Select a compatible format between video input and output window. The algorithm attempts to:
+1. Use a format shared by video input and window output
+2. Select a format most useful for barcode scanning
+3. Minimize format conversion cost if necessary
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object (must be opened)
+</ParamField>
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object, or NULL to negotiate format without window constraints
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+**Example:**
+```c
+zbar_video_t *video = zbar_video_create();
+zbar_window_t *window = zbar_window_create();
+
+zbar_video_open(video, "/dev/video0");
+zbar_window_attach(window, display, drawable);
+
+// Negotiate best format for both video and window
+zbar_negotiate_format(video, window);
+
+zbar_video_enable(video, 1);
+```
+
+## Error Handling
+
+### zbar_video_error_spew
+
+```c
+int zbar_video_error_spew(const zbar_video_t *video, int verbosity)
+```
+
+Display detailed error information to stderr.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="verbosity" type="int">
+  Verbosity level (higher values = more detail)
+</ParamField>
+
+**Returns:** Non-zero value suitable for passing to `exit()`
+
+---
+
+### zbar_video_error_string
+
+```c
+const char *zbar_video_error_string(const zbar_video_t *video, int verbosity)
+```
+
+Retrieve detailed error string for last video error.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+<ParamField path="verbosity" type="int">
+  Verbosity level
+</ParamField>
+
+**Returns:** Error description string
+
+---
+
+### zbar_video_get_error_code
+
+```c
+zbar_error_t zbar_video_get_error_code(const zbar_video_t *video)
+```
+
+Retrieve error code for last video error.
+
+<ParamField path="video" type="const zbar_video_t*">
+  Video object
+</ParamField>
+
+**Returns:** Error code (see `zbar_error_t` enum)
+
+## Platform-Specific Notes
+
+### Linux (V4L2)
+
+- ZBar supports Video4Linux2 (V4L2) API
+- V4L1 is legacy and has limited support
+- Requires kernel 3.16 or higher for full feature support
+- Device paths typically: `/dev/video0`, `/dev/video1`, etc.
+- Most modern webcams and capture devices are supported
+
+**V4L2 I/O Modes:**
+- **read()**: Simple but potentially slower
+- **mmap**: Memory-mapped buffers (most common)
+- **USERPTR**: User-allocated buffers (advanced)
+
+### Windows
+
+**Video for Windows (VfW):**
+- Legacy API, limited modern device support
+- Simpler but less flexible
+
+**DirectShow:**
+- Modern Windows video capture API
+- Better device support and performance
+- Device paths use DirectShow DevicePath property
+
+**Build Configuration:**
+ZBar can be built with either VfW or DirectShow support. Check the binary configuration to determine which is available.
+
+## Common Patterns
+
+### Enumerating Controls
+
+```c
+void print_video_controls(zbar_video_t *video) {
+    int i = 0;
+    video_controls_t *ctrl;
+    
+    printf("Available video controls:\n");
+    while ((ctrl = zbar_video_get_controls(video, i++)) != NULL) {
+        printf("  %s", ctrl->name);
+        if (ctrl->group)
+            printf(" [%s]", ctrl->group);
+        printf("\n");
+        
+        switch (ctrl->type) {
+            case VIDEO_CNTL_INTEGER:
+            case VIDEO_CNTL_INTEGER64:
+                printf("    Type: Integer\n");
+                printf("    Range: %ld to %ld (step: %lu)\n",
+                       ctrl->min, ctrl->max, ctrl->step);
+                printf("    Default: %ld\n", ctrl->def);
+                break;
+            case VIDEO_CNTL_MENU:
+                printf("    Type: Menu\n");
+                for (int j = 0; j < ctrl->menu_size; j++) {
+                    printf("      [%ld] %s\n",
+                           ctrl->menu[j].value,
+                           ctrl->menu[j].name);
+                }
+                break;
+            case VIDEO_CNTL_BOOLEAN:
+                printf("    Type: Boolean\n");
+                break;
+        }
+    }
+}
+```
+
+### Video Capture Loop
+
+```c
+zbar_video_t *video = zbar_video_create();
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+
+// Open and initialize
+zbar_video_open(video, "/dev/video0");
+zbar_negotiate_format(video, NULL);
+zbar_video_enable(video, 1);
+
+// Capture loop
+while (running) {
+    zbar_image_t *image = zbar_video_next_image(video);
+    if (image) {
+        // Scan for barcodes
+        zbar_scan_image(scanner, image);
+        
+        // Process results...
+        
+        zbar_image_destroy(image);
+    }
+}
+
+// Cleanup
+zbar_video_enable(video, 0);
+zbar_video_destroy(video);
+zbar_image_scanner_destroy(scanner);
+```
+
+### Using poll() for Non-blocking Capture
+
+```c
+#include <poll.h>
+
+zbar_video_t *video = zbar_video_create();
+zbar_video_open(video, "/dev/video0");
+zbar_negotiate_format(video, NULL);
+zbar_video_enable(video, 1);
+
+int fd = zbar_video_get_fd(video);
+if (fd >= 0) {
+    struct pollfd pfd = {
+        .fd = fd,
+        .events = POLLIN
+    };
+    
+    while (running) {
+        int ret = poll(&pfd, 1, 1000);  // 1 second timeout
+        
+        if (ret > 0 && (pfd.revents & POLLIN)) {
+            zbar_image_t *image = zbar_video_next_image(video);
+            // Process image...
+            zbar_image_destroy(image);
+        }
+    }
+}
+```
+
+## See Also
+
+- [Window Interface](/api/window) - Display video frames and overlay results
+- [Image Interface](/api/image-scanner) - Work with captured image data
+- [Image Scanner](/api/image-scanner) - Scan images for barcodes
+- [Processor Interface](/api/processor) - High-level all-in-one interface

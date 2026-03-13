@@ -1,0 +1,573 @@
+---
+title: Window Interface
+description: Output window abstraction for displaying images and scan results
+---
+
+The Window interface provides mid-level abstraction for displaying images to platform-specific output windows. It handles rendering, scaling, and overlay display of barcode detection results.
+
+## Overview
+
+The window interface:
+- Attaches to platform-specific display windows (X11 Drawable, Windows HWND)
+- Scales and displays images
+- Draws overlay annotations (barcode outlines, frame rate)
+- Handles window resize and redraw events
+- Works seamlessly with the Video interface
+
+## Basic Usage
+
+```c
+zbar_window_t *window = zbar_window_create();
+zbar_window_attach(window, display, drawable);
+zbar_window_set_overlay(window, 1);
+
+zbar_image_t *image = /* ... get image ... */;
+zbar_window_draw(window, image);
+
+zbar_window_destroy(window);
+```
+
+## Type Definition
+
+### zbar_window_t
+
+Opaque window object that manages image display and overlay rendering.
+
+## Functions
+
+### zbar_window_create
+
+```c
+zbar_window_t *zbar_window_create(void)
+```
+
+Constructor for window objects.
+
+**Returns:** New window object, or NULL on allocation failure
+
+**Default Settings:**
+- Overlay level: 1 (symbol outlines enabled)
+- No attached display
+
+---
+
+### zbar_window_destroy
+
+```c
+void zbar_window_destroy(zbar_window_t *window)
+```
+
+Destructor. Detaches from display and cleans up all resources.
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object to destroy
+</ParamField>
+
+---
+
+### zbar_window_attach
+
+```c
+int zbar_window_attach(zbar_window_t *window,
+                      void *x11_display_w32_hwnd,
+                      unsigned long x11_drawable)
+```
+
+Associate window with an existing platform-specific window resource. Input images will be scaled to fit the output window.
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object
+</ParamField>
+
+<ParamField path="x11_display_w32_hwnd" type="void*">
+  Platform-specific display handle:
+  - **X11**: Pointer to Display structure
+  - **Windows**: HWND window handle
+  - **NULL**: Detach from current resource (further input ignored)
+</ParamField>
+
+<ParamField path="x11_drawable" type="unsigned long">
+  **X11 only**: Drawable ID (Window or Pixmap)
+  **Windows**: Ignored (pass 0)
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+**Platform Examples:**
+
+```c
+// X11
+Display *display = XOpenDisplay(NULL);
+Window xwindow = /* ... create X11 window ... */;
+zbar_window_attach(window, display, xwindow);
+
+// Windows
+HWND hwnd = /* ... create window ... */;
+zbar_window_attach(window, hwnd, 0);
+```
+
+<Note>
+Detaching (passing NULL) releases any held image and cleans up platform-specific resources.
+</Note>
+
+---
+
+### zbar_window_set_overlay
+
+```c
+void zbar_window_set_overlay(zbar_window_t *window, int level)
+```
+
+Control content level of the overlay display. The overlay shows graphical annotations for informational or debug purposes.
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object
+</ParamField>
+
+<ParamField path="level" type="int">
+  Overlay level:
+  - `0` - Disable overlay
+  - `1` - Outline decoded symbols (default)
+  - `2` - Also track and display input frame rate
+</ParamField>
+
+**Notes:**
+- Higher values may decrease performance
+- Level is automatically clamped to range [0, 2]
+- Changes take effect on next draw operation
+
+---
+
+### zbar_window_get_overlay
+
+```c
+int zbar_window_get_overlay(const zbar_window_t *window)
+```
+
+Retrieve current overlay level.
+
+<ParamField path="window" type="const zbar_window_t*">
+  Window object
+</ParamField>
+
+**Returns:** Current overlay level (0-2), or -1 on error
+
+**Since:** 0.10
+
+---
+
+### zbar_window_draw
+
+```c
+int zbar_window_draw(zbar_window_t *window, zbar_image_t *image)
+```
+
+Draw a new image into the output window. The image is scaled to fit the window while maintaining aspect ratio.
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object
+</ParamField>
+
+<ParamField path="image" type="zbar_image_t*">
+  Image to display, or NULL to clear the window
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+**Behavior:**
+- Image is automatically scaled and centered
+- Format conversion performed if necessary
+- Overlay annotations drawn if enabled
+- Previous image reference is released
+
+<Note>
+The window takes a reference to the image. The image will not be freed until replaced or the window is destroyed.
+</Note>
+
+---
+
+### zbar_window_redraw
+
+```c
+int zbar_window_redraw(zbar_window_t *window)
+```
+
+Redraw the last image. Used as an exposure handler when the window needs repainting.
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+**Use Cases:**
+- Responding to window expose/paint events
+- Updating overlay without changing image
+- Refreshing display after window state change
+
+---
+
+### zbar_window_resize
+
+```c
+int zbar_window_resize(zbar_window_t *window,
+                      unsigned width,
+                      unsigned height)
+```
+
+Resize the image window. Used as a reconfigure handler when window dimensions change.
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object
+</ParamField>
+
+<ParamField path="width" type="unsigned">
+  New window width in pixels
+</ParamField>
+
+<ParamField path="height" type="unsigned">
+  New window height in pixels
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+<Warning>
+This does NOT redraw the window contents. Call `zbar_window_redraw()` after resize to update the display.
+</Warning>
+
+**Since:** 0.3, behavior changed in 0.4
+
+---
+
+### zbar_negotiate_format
+
+```c
+int zbar_negotiate_format(zbar_video_t *video, zbar_window_t *window)
+```
+
+Select a compatible format between video input and output window. The algorithm attempts to:
+1. Use a format shared by video input and window output
+2. Select a format most useful for barcode scanning
+3. Minimize format conversion cost if necessary
+
+<ParamField path="video" type="zbar_video_t*">
+  Video object (must be opened)
+</ParamField>
+
+<ParamField path="window" type="zbar_window_t*">
+  Window object, or NULL for video-only format selection
+</ParamField>
+
+**Returns:** 0 on success, -1 on error
+
+**See:** [Video Interface - Format Negotiation](/api/video#zbar_negotiate_format)
+
+## Error Handling
+
+### zbar_window_error_spew
+
+```c
+int zbar_window_error_spew(const zbar_window_t *window, int verbosity)
+```
+
+Display detailed error information to stderr.
+
+<ParamField path="window" type="const zbar_window_t*">
+  Window object
+</ParamField>
+
+<ParamField path="verbosity" type="int">
+  Verbosity level (higher values = more detail)
+</ParamField>
+
+**Returns:** Non-zero value suitable for passing to `exit()`
+
+---
+
+### zbar_window_error_string
+
+```c
+const char *zbar_window_error_string(const zbar_window_t *window,
+                                     int verbosity)
+```
+
+Retrieve detailed error string for last window error.
+
+<ParamField path="window" type="const zbar_window_t*">
+  Window object
+</ParamField>
+
+<ParamField path="verbosity" type="int">
+  Verbosity level
+</ParamField>
+
+**Returns:** Error description string
+
+---
+
+### zbar_window_get_error_code
+
+```c
+zbar_error_t zbar_window_get_error_code(const zbar_window_t *window)
+```
+
+Retrieve error code for last window error.
+
+<ParamField path="window" type="const zbar_window_t*">
+  Window object
+</ParamField>
+
+**Returns:** Error code (see `zbar_error_t` enum)
+
+**Common Error Codes:**
+- `ZBAR_ERR_XDISPLAY` - X11 display error
+- `ZBAR_ERR_XPROTO` - X11 protocol error
+- `ZBAR_ERR_CLOSED` - Output window is closed
+- `ZBAR_ERR_WINAPI` - Windows system error
+
+## Platform-Specific Notes
+
+### X11 (Linux/Unix)
+
+**Requirements:**
+- X11 development libraries (libX11, libXv)
+- Valid X11 Display connection
+- Drawable must be a Window or Pixmap
+
+**Display Rendering:**
+- Uses XVideo (Xv) extension when available for better performance
+- Falls back to XImage for software rendering
+- Supports hardware-accelerated scaling and color conversion
+
+**Error Types:**
+- `ZBAR_ERR_XDISPLAY` - Cannot connect to X server or display error
+- `ZBAR_ERR_XPROTO` - X protocol error (invalid drawable, etc.)
+- `ZBAR_ERR_CLOSED` - Window has been destroyed
+
+**Example X11 Setup:**
+```c
+Display *display = XOpenDisplay(NULL);
+if (!display) {
+    fprintf(stderr, "Cannot open X display\n");
+    return -1;
+}
+
+int screen = DefaultScreen(display);
+Window root = RootWindow(display, screen);
+
+Window xwin = XCreateSimpleWindow(
+    display, root,
+    0, 0, 640, 480, 1,
+    BlackPixel(display, screen),
+    WhitePixel(display, screen)
+);
+
+XSelectInput(display, xwin, ExposureMask | StructureNotifyMask);
+XMapWindow(display, xwin);
+
+zbar_window_t *window = zbar_window_create();
+zbar_window_attach(window, display, xwin);
+```
+
+### Windows
+
+**Requirements:**
+- Valid HWND window handle
+- GDI or DirectDraw support
+
+**Display Rendering:**
+- Uses GDI for basic rendering
+- May use DirectDraw for accelerated display (if available)
+
+**Error Types:**
+- `ZBAR_ERR_WINAPI` - Windows API error
+- `ZBAR_ERR_CLOSED` - Window has been closed or destroyed
+
+**Example Windows Setup:**
+```c
+HWND hwnd = CreateWindowEx(
+    0, "ZBarWindow", "ZBar Scanner",
+    WS_OVERLAPPEDWINDOW,
+    CW_USEDEFAULT, CW_USEDEFAULT,
+    640, 480,
+    NULL, NULL, hInstance, NULL
+);
+
+ShowWindow(hwnd, SW_SHOW);
+
+zbar_window_t *window = zbar_window_create();
+zbar_window_attach(window, hwnd, 0);
+```
+
+## Overlay Features
+
+### Level 0: Disabled
+No overlay graphics are drawn. Only the image is displayed.
+
+### Level 1: Symbol Outlines (Default)
+
+Draws outlines around detected barcodes:
+
+- **QR Codes / SQ Codes**: Polygon outline connecting all corner points
+- **Linear Barcodes**: Marker points at scan locations
+- **Color Coding**:
+  - Green: Successfully decoded, cached symbol
+  - Red/Yellow: Newly detected symbol
+
+### Level 2: Frame Rate Display
+
+All features from Level 1, plus:
+- Real-time frame rate calculation
+- FPS display in corner (e.g., "30.0 fps")
+- Performance monitoring
+
+## Common Patterns
+
+### Video Display with Overlay
+
+```c
+zbar_video_t *video = zbar_video_create();
+zbar_window_t *window = zbar_window_create();
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+
+// Setup
+zbar_video_open(video, "/dev/video0");
+zbar_window_attach(window, display, xwindow);
+zbar_window_set_overlay(window, 2);  // Show symbols and FPS
+
+// Negotiate compatible format
+zbar_negotiate_format(video, window);
+zbar_video_enable(video, 1);
+
+// Display loop
+while (running) {
+    zbar_image_t *image = zbar_video_next_image(video);
+    if (image) {
+        // Scan for barcodes
+        zbar_scan_image(scanner, image);
+        
+        // Display with overlay
+        zbar_window_draw(window, image);
+        
+        zbar_image_destroy(image);
+    }
+}
+
+// Cleanup
+zbar_video_enable(video, 0);
+zbar_video_destroy(video);
+zbar_window_destroy(window);
+zbar_image_scanner_destroy(scanner);
+```
+
+### Handling Window Events (X11)
+
+```c
+while (running) {
+    XEvent event;
+    
+    // Check for X events
+    while (XPending(display)) {
+        XNextEvent(display, &event);
+        
+        switch (event.type) {
+            case Expose:
+                // Redraw on expose
+                if (event.xexpose.count == 0)
+                    zbar_window_redraw(window);
+                break;
+                
+            case ConfigureNotify:
+                // Handle resize
+                zbar_window_resize(window,
+                    event.xconfigure.width,
+                    event.xconfigure.height);
+                zbar_window_redraw(window);
+                break;
+                
+            case ClientMessage:
+                // Handle window close
+                if (event.xclient.data.l[0] == wm_delete_window)
+                    running = 0;
+                break;
+        }
+    }
+    
+    // Process video frames...
+}
+```
+
+### Static Image Display
+
+```c
+// Load and display a single image
+zbar_image_t *image = /* ... load from file ... */;
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+zbar_window_t *window = zbar_window_create();
+
+// Scan for barcodes
+zbar_scan_image(scanner, image);
+
+// Display with overlay
+zbar_window_attach(window, display, xwindow);
+zbar_window_set_overlay(window, 1);
+zbar_window_draw(window, image);
+
+// Keep displayed until user closes window
+while (window_open) {
+    // Handle events...
+}
+
+zbar_window_destroy(window);
+zbar_image_scanner_destroy(scanner);
+zbar_image_destroy(image);
+```
+
+### Scaling Behavior
+
+The window automatically scales images to fit while maintaining aspect ratio:
+
+```c
+// Window is 800x600
+// Image is 1920x1080 (16:9)
+// Result: Image scaled to 800x450, centered vertically
+//   - 75 pixel black bars on top and bottom
+//   - Full width display
+
+// Window is 640x480 (4:3)
+// Image is 1920x1080 (16:9)
+// Result: Image scaled to 640x360, centered vertically
+//   - 60 pixel black bars on top and bottom
+```
+
+Black bars are automatically added to maintain aspect ratio.
+
+## Performance Considerations
+
+### Overlay Performance
+
+- **Level 0**: Fastest, no overlay drawing overhead
+- **Level 1**: Minimal impact, simple polygon/marker rendering
+- **Level 2**: Slight impact from FPS calculation and text rendering
+
+### Format Conversion
+
+Automatic format conversion occurs when:
+- Video format != Window preferred format
+- Image format != Window native format
+
+Use `zbar_negotiate_format()` to minimize conversions.
+
+### Hardware Acceleration
+
+- **X11**: XVideo extension provides GPU-accelerated scaling and color conversion
+- **Windows**: DirectDraw provides hardware acceleration when available
+- **Fallback**: Software rendering is always available
+
+## See Also
+
+- [Video Interface](/api/video) - Capture video frames for display
+- [Image Interface](/api/image-scanner) - Work with image data
+- [Image Scanner](/api/image-scanner) - Detect barcodes in images
+- [Processor Interface](/api/processor) - High-level all-in-one interface
+- [Global Functions](/api/overview) - Format codes and negotiation

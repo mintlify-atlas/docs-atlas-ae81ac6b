@@ -1,0 +1,608 @@
+---
+title: Java Bindings
+description: Use ZBar from Java via JNI wrapper
+---
+
+The ZBar Java bindings provide a JNI (Java Native Interface) wrapper for accessing ZBar functionality from Java applications.
+
+## Installation
+
+### Requirements
+
+- Java Development Kit (JDK) 6 or later
+- ZBar library (libzbar)
+- ZBar JNI library (libzbarjni)
+
+### Building from Source
+
+```bash
+cd java
+make
+sudo make install
+```
+
+This builds `zbar.jar` and the native JNI library `libzbarjni.so` (or `.dll` on Windows).
+
+### Classpath Setup
+
+Add `zbar.jar` to your classpath:
+
+```bash
+javac -cp zbar.jar MyApp.java
+java -cp .:zbar.jar MyApp
+```
+
+### Native Library Loading
+
+The Java bindings automatically load the native library:
+
+```java
+static {
+    System.loadLibrary("zbarjni");
+}
+```
+
+<Warning>
+Ensure `libzbarjni.so` (or `libzbarjni.dll` on Windows) is in your library path (`LD_LIBRARY_PATH` on Linux, `PATH` on Windows).
+</Warning>
+
+## Quick Start
+
+### Scanning an Image
+
+```java
+import net.sourceforge.zbar.*;
+
+public class ScanExample {
+    public static void main(String[] args) {
+        // Create scanner
+        ImageScanner scanner = new ImageScanner();
+        scanner.setConfig(Symbol.NONE, Config.ENABLE, 1);
+        
+        // Create image
+        Image image = new Image(width, height, "Y800");
+        image.setData(imageData);
+        
+        // Scan
+        int n = scanner.scanImage(image);
+        System.out.println("Found " + n + " symbols");
+        
+        // Get results
+        SymbolSet results = scanner.getResults();
+        for (Symbol sym : results) {
+            System.out.println("Type: " + sym.getType());
+            System.out.println("Data: " + sym.getData());
+        }
+        
+        // Cleanup
+        image.destroy();
+        scanner.destroy();
+    }
+}
+```
+
+### Using Iterator
+
+```java
+import net.sourceforge.zbar.*;
+
+ImageScanner scanner = new ImageScanner();
+scanner.setConfig(0, Config.ENABLE, 1);
+
+Image image = new Image(width, height, "Y800", imageData);
+int n = scanner.scanImage(image);
+
+SymbolSet symbols = image.getSymbols();
+for (Symbol symbol : symbols) {
+    System.out.println(symbol.getType() + ": " + symbol.getData());
+}
+```
+
+## Core Classes
+
+### ImageScanner
+
+The `ImageScanner` class reads barcodes from 2-D images.
+
+```java
+import net.sourceforge.zbar.*;
+
+// Create scanner
+ImageScanner scanner = new ImageScanner();
+
+// Configure - enable all symbologies
+scanner.setConfig(Symbol.NONE, Config.ENABLE, 1);
+
+// Configure specific symbology
+scanner.setConfig(Symbol.QRCODE, Config.ENABLE, 1);
+
+// Parse config string
+scanner.parseConfig("enable");
+scanner.parseConfig("qrcode.enable=1");
+
+// Enable result caching for video
+scanner.enableCache(true);
+
+// Scan image
+Image image = new Image(width, height, "Y800");
+image.setData(data);
+int n = scanner.scanImage(image);
+
+// Get results
+SymbolSet results = scanner.getResults();
+
+// Cleanup
+scanner.destroy();
+```
+
+#### Methods
+
+- `ImageScanner()` - Create image scanner
+- `void setConfig(int symbology, int config, int value)` - Set configuration
+- `void parseConfig(String config)` - Parse configuration string
+- `void enableCache(boolean enable)` - Enable inter-frame result cache
+- `int scanImage(Image image)` - Scan image, returns symbol count
+- `SymbolSet getResults()` - Get decode results
+- `void destroy()` - Clean up native resources
+
+### Image
+
+The `Image` class stores image data with format and size metadata.
+
+```java
+import net.sourceforge.zbar.*;
+
+// Constructors
+Image image = new Image();
+Image image = new Image(640, 480);
+Image image = new Image(640, 480, "Y800");
+Image image = new Image("Y800");
+
+// Set properties
+image.setFormat("Y800");
+image.setSize(640, 480);
+image.setSize(new int[]{640, 480});
+image.setData(byteData);
+image.setData(intData);
+image.setSequence(1);
+
+// Get properties
+String format = image.getFormat();
+int width = image.getWidth();
+int height = image.getHeight();
+int[] size = image.getSize();
+byte[] data = image.getData();
+int seq = image.getSequence();
+
+// Crop region
+image.setCrop(10, 10, 300, 200);
+image.setCrop(new int[]{10, 10, 300, 200});
+int[] crop = image.getCrop();
+
+// Format conversion
+Image gray = image.convert("Y800");
+
+// Get symbols
+SymbolSet symbols = image.getSymbols();
+
+// Cleanup
+image.destroy();
+```
+
+#### Constructors
+
+- `Image()` - Create empty image
+- `Image(int width, int height)` - Create with dimensions
+- `Image(int width, int height, String format)` - Create with format
+- `Image(String format)` - Create with format only
+
+#### Methods
+
+- `String getFormat()` - Get image format fourcc
+- `void setFormat(String format)` - Set image format
+- `int getWidth()` - Get image width
+- `int getHeight()` - Get image height
+- `int[] getSize()` - Get [width, height]
+- `void setSize(int width, int height)` - Set dimensions
+- `void setSize(int[] size)` - Set dimensions from array
+- `int getSequence()` - Get frame/page sequence number
+- `void setSequence(int seq)` - Set sequence number
+- `int[] getCrop()` - Get crop rectangle [x, y, width, height]
+- `void setCrop(int x, int y, int width, int height)` - Set crop region
+- `void setCrop(int[] crop)` - Set crop from array
+- `byte[] getData()` - Get raw image data
+- `void setData(byte[] data)` - Set image data
+- `void setData(int[] data)` - Set image data from int array
+- `Image convert(String format)` - Convert to format, returns new Image
+- `SymbolSet getSymbols()` - Get decoded symbols
+- `void destroy()` - Clean up native resources
+
+### Symbol
+
+The `Symbol` class represents a decoded barcode symbol.
+
+```java
+import net.sourceforge.zbar.*;
+
+for (Symbol symbol : symbols) {
+    // Type and data
+    int type = symbol.getType();
+    String data = symbol.getData();
+    byte[] rawData = symbol.getDataBytes();
+    
+    // Quality metrics
+    int quality = symbol.getQuality();
+    int count = symbol.getCount();
+    
+    // Configuration
+    int configMask = symbol.getConfigMask();
+    int modifierMask = symbol.getModifierMask();
+    
+    // Bounding box
+    int[] bounds = symbol.getBounds();
+    if (bounds != null) {
+        int x = bounds[0];
+        int y = bounds[1];
+        int width = bounds[2];
+        int height = bounds[3];
+    }
+    
+    // Location points
+    int[] point = symbol.getLocationPoint(0);
+    int x = point[0];
+    int y = point[1];
+    
+    // Orientation
+    int orientation = symbol.getOrientation();
+    
+    // Components (composite symbols)
+    SymbolSet components = symbol.getComponents();
+    
+    // Cleanup
+    symbol.destroy();
+}
+```
+
+#### Symbol Type Constants
+
+```java
+Symbol.NONE          // No symbol
+Symbol.PARTIAL       // Partial symbol
+Symbol.EAN8          // EAN-8
+Symbol.UPCE          // UPC-E
+Symbol.ISBN10        // ISBN-10
+Symbol.UPCA          // UPC-A
+Symbol.EAN13         // EAN-13
+Symbol.ISBN13        // ISBN-13
+Symbol.I25           // Interleaved 2 of 5
+Symbol.DATABAR       // GS1 DataBar
+Symbol.DATABAR_EXP   // DataBar Expanded
+Symbol.CODABAR       // Codabar
+Symbol.CODE39        // Code 39
+Symbol.CODE93        // Code 93
+Symbol.CODE128       // Code 128
+Symbol.QRCODE        // QR Code
+Symbol.PDF417        // PDF417
+```
+
+#### Methods
+
+- `int getType()` - Get symbol type
+- `String getData()` - Get decoded data as String
+- `byte[] getDataBytes()` - Get raw decoded bytes
+- `int getQuality()` - Get confidence metric
+- `int getCount()` - Get cache count
+- `int getConfigMask()` - Get config bitmask
+- `int getModifierMask()` - Get modifier bitmask
+- `int[] getBounds()` - Get bounding box [x, y, width, height]
+- `int[] getLocationPoint(int index)` - Get location point [x, y]
+- `int getOrientation()` - Get orientation
+- `SymbolSet getComponents()` - Get component symbols
+- `void destroy()` - Clean up native resources
+
+### SymbolSet
+
+The `SymbolSet` class is a container for decoded symbols.
+
+```java
+import net.sourceforge.zbar.*;
+
+SymbolSet symbols = scanner.getResults();
+
+// Iterate using for-each
+for (Symbol symbol : symbols) {
+    System.out.println(symbol.getData());
+}
+
+// Use iterator explicitly
+SymbolIterator iter = symbols.iterator();
+while (iter.hasNext()) {
+    Symbol symbol = iter.next();
+    System.out.println(symbol.getData());
+}
+```
+
+`SymbolSet` implements `Iterable<Symbol>`, so it can be used in enhanced for loops.
+
+### SymbolIterator
+
+The `SymbolIterator` class iterates over symbols in a set.
+
+```java
+import net.sourceforge.zbar.*;
+
+SymbolIterator iter = symbols.iterator();
+while (iter.hasNext()) {
+    Symbol symbol = iter.next();
+    // Process symbol
+}
+```
+
+## Configuration
+
+### Config Constants
+
+Available in the `Config` class:
+
+```java
+import net.sourceforge.zbar.Config;
+
+Config.ENABLE       // Enable symbology
+Config.ADD_CHECK    // Enable check digit
+Config.EMIT_CHECK   // Return check digit
+Config.ASCII        // Enable full ASCII
+Config.BINARY       // Don't convert binary to text
+Config.MIN_LEN      // Minimum data length
+Config.MAX_LEN      // Maximum data length
+Config.POSITION     // Enable position data
+Config.X_DENSITY    // Vertical scan density
+Config.Y_DENSITY    // Horizontal scan density
+```
+
+### Configuration Examples
+
+```java
+import net.sourceforge.zbar.*;
+
+ImageScanner scanner = new ImageScanner();
+
+// Enable all symbologies
+scanner.setConfig(Symbol.NONE, Config.ENABLE, 1);
+
+// Disable all, enable only QR
+scanner.setConfig(Symbol.NONE, Config.ENABLE, 0);
+scanner.setConfig(Symbol.QRCODE, Config.ENABLE, 1);
+
+// Set minimum length for Code 128
+scanner.setConfig(Symbol.CODE128, Config.MIN_LEN, 6);
+
+// Parse config strings
+scanner.parseConfig("enable");
+scanner.parseConfig("qrcode.enable=1");
+scanner.parseConfig("code128.min-length=6");
+```
+
+## Orientation Constants
+
+Available in the `Orientation` class:
+
+```java
+import net.sourceforge.zbar.Orientation;
+
+Orientation.UNKNOWN  // Unable to determine
+Orientation.UP       // Upright, left to right
+Orientation.RIGHT    // Sideways, top to bottom
+Orientation.DOWN     // Upside-down, right to left
+Orientation.LEFT     // Sideways, bottom to top
+```
+
+## Modifier Constants
+
+Available in the `Modifier` class:
+
+```java
+import net.sourceforge.zbar.Modifier;
+
+Modifier.GS1  // GS1 (EAN.UCC) reserved
+Modifier.AIM  // AIM reserved
+```
+
+## Working with BufferedImage
+
+```java
+import java.awt.image.BufferedImage;
+import java.io.File;
+import javax.imageio.ImageIO;
+import net.sourceforge.zbar.*;
+
+public class BufferedImageExample {
+    public static void main(String[] args) throws Exception {
+        // Load image
+        BufferedImage buffered = ImageIO.read(new File("barcode.png"));
+        
+        // Convert to grayscale
+        BufferedImage gray = new BufferedImage(
+            buffered.getWidth(),
+            buffered.getHeight(),
+            BufferedImage.TYPE_BYTE_GRAY
+        );
+        gray.getGraphics().drawImage(buffered, 0, 0, null);
+        
+        // Extract data
+        int width = gray.getWidth();
+        int height = gray.getHeight();
+        byte[] data = ((java.awt.image.DataBufferByte) 
+            gray.getRaster().getDataBuffer()).getData();
+        
+        // Create ZBar image
+        Image image = new Image(width, height, "Y800");
+        image.setData(data);
+        
+        // Scan
+        ImageScanner scanner = new ImageScanner();
+        scanner.setConfig(0, Config.ENABLE, 1);
+        int n = scanner.scanImage(image);
+        
+        System.out.println("Found " + n + " symbols:");
+        for (Symbol sym : image.getSymbols()) {
+            System.out.println("  " + sym.getData());
+        }
+        
+        // Cleanup
+        image.destroy();
+        scanner.destroy();
+    }
+}
+```
+
+## Resource Management
+
+<Warning>
+Always call `destroy()` on Image, ImageScanner, and Symbol objects to free native resources.
+</Warning>
+
+```java
+ImageScanner scanner = new ImageScanner();
+Image image = new Image(width, height, "Y800");
+
+try {
+    // Use scanner and image
+    scanner.scanImage(image);
+    
+    for (Symbol symbol : image.getSymbols()) {
+        // Process symbol
+        symbol.destroy();
+    }
+} finally {
+    image.destroy();
+    scanner.destroy();
+}
+```
+
+Consider using try-with-resources if you implement `AutoCloseable`:
+
+```java
+public class ZBarImage implements AutoCloseable {
+    private final Image image;
+    
+    public ZBarImage(int width, int height, String format) {
+        this.image = new Image(width, height, format);
+    }
+    
+    public Image getImage() {
+        return image;
+    }
+    
+    @Override
+    public void close() {
+        image.destroy();
+    }
+}
+
+// Usage
+try (ZBarImage zbarImage = new ZBarImage(width, height, "Y800")) {
+    Image image = zbarImage.getImage();
+    // Use image
+}
+```
+
+## Complete Example
+
+```java
+import net.sourceforge.zbar.*;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import javax.imageio.ImageIO;
+
+public class ZBarExample {
+    public static void main(String[] args) {
+        if (args.length == 0) {
+            System.err.println("Usage: ZBarExample <image-file>");
+            System.exit(1);
+        }
+        
+        ImageScanner scanner = null;
+        Image image = null;
+        
+        try {
+            // Load image file
+            BufferedImage buffered = ImageIO.read(new File(args[0]));
+            
+            // Convert to grayscale
+            BufferedImage gray = new BufferedImage(
+                buffered.getWidth(),
+                buffered.getHeight(),
+                BufferedImage.TYPE_BYTE_GRAY
+            );
+            gray.getGraphics().drawImage(buffered, 0, 0, null);
+            
+            // Extract image data
+            int width = gray.getWidth();
+            int height = gray.getHeight();
+            byte[] data = ((java.awt.image.DataBufferByte)
+                gray.getRaster().getDataBuffer()).getData();
+            
+            // Create ZBar image
+            image = new Image(width, height, "Y800");
+            image.setData(data);
+            
+            // Create and configure scanner
+            scanner = new ImageScanner();
+            scanner.setConfig(Symbol.NONE, Config.ENABLE, 1);
+            scanner.enableCache(false);
+            
+            // Scan image
+            int n = scanner.scanImage(image);
+            System.out.println("Found " + n + " symbol(s):\n");
+            
+            // Print results
+            for (Symbol symbol : image.getSymbols()) {
+                System.out.println("Type: " + getTypeName(symbol.getType()));
+                System.out.println("Data: " + symbol.getData());
+                System.out.println("Quality: " + symbol.getQuality());
+                
+                int[] bounds = symbol.getBounds();
+                if (bounds != null) {
+                    System.out.println("Bounds: (" + bounds[0] + ", " + 
+                                     bounds[1] + ", " + bounds[2] + ", " +
+                                     bounds[3] + ")");
+                }
+                System.out.println();
+                
+                symbol.destroy();
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            if (image != null) image.destroy();
+            if (scanner != null) scanner.destroy();
+        }
+    }
+    
+    private static String getTypeName(int type) {
+        switch (type) {
+            case Symbol.QRCODE: return "QR Code";
+            case Symbol.CODE128: return "Code 128";
+            case Symbol.CODE39: return "Code 39";
+            case Symbol.EAN13: return "EAN-13";
+            case Symbol.UPCA: return "UPC-A";
+            case Symbol.PDF417: return "PDF417";
+            default: return "Unknown (" + type + ")";
+        }
+    }
+}
+```
+
+## Threading Notes
+
+<Note>
+The Java bindings use JNI to call native code. Ensure proper synchronization when using ZBar objects from multiple threads.
+</Note>
+
+## See Also
+
+- [Configuration](/guides/configuration) - Configuration options
+- [Supported Symbologies](/symbologies) - Barcode types
+- [Java source](https://github.com/mchehab/zbar/tree/master/java) - Java bindings source code

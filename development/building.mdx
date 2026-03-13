@@ -1,0 +1,430 @@
+---
+title: Building from Source
+description: Complete build instructions for ZBar Advanced with configure options and dependencies
+---
+
+This guide covers building ZBar Advanced from source code, including all configure options and dependency requirements.
+
+## Prerequisites
+
+### Required Build Tools
+
+At minimum, you need the following packages to generate the configure script and build ZBar:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install autoconf autopoint pkg-config libtool gcc make
+
+# Fedora/RHEL
+sudo dnf install autoconf gettext-devel pkg-config libtool gcc make
+
+# macOS
+brew install autoconf automake libtool pkg-config gettext
+```
+
+### Core Dependencies
+
+- **autoconf** >= 2.61
+- **automake** >= 1.10.1
+- **libtool** >= 2.2.6
+- **gettext** >= 0.18.1.1
+- **pkg-config** >= 0.25
+
+### Optional Dependencies
+
+<AccordionGroup>
+  <Accordion title="Video Support">
+    - **Video4Linux2** (Linux kernel headers)
+    - **libv4l-dev** - Recommended for broader camera support
+    - **VfW or DirectShow** (Windows only)
+  </Accordion>
+
+  <Accordion title="Image Processing">
+    - **ImageMagick** >= 6.2.6 (MagickWand development files)
+      - Or **GraphicsMagick** as an alternative
+    - **libjpeg** (JPEG image conversion support)
+  </Accordion>
+
+  <Accordion title="GUI Widgets">
+    - **GTK+ 2.x or 3.x** (gtk+-2.0-dev or libgtk-3-dev)
+    - **Qt5 or Qt6** (qtbase5-dev)
+    - **X11** with XVideo and XShm extensions
+  </Accordion>
+
+  <Accordion title="Language Bindings">
+    - **Python 2.7+** or **Python 3.x** development headers
+    - **PyGTK 2.0** (for Python 2 GTK widget)
+    - **GObject Introspection** >= 0.6.7 (for Python 3 GTK widget)
+    - **Java JDK** (for Java bindings)
+    - **Perl** >= 5 (built separately)
+  </Accordion>
+
+  <Accordion title="System Integration">
+    - **dbus-1** >= 1.0 (D-Bus integration)
+  </Accordion>
+
+  <Accordion title="Documentation">
+    - **xmlto** >= 0.0.20 (for building documentation)
+    - **Doxygen** (for API documentation)
+  </Accordion>
+</AccordionGroup>
+
+## Basic Build Process
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/mchehab/zbar.git
+    cd zbar
+    ```
+  </Step>
+
+  <Step title="Generate configure script">
+    ```bash
+    autoreconf -vfi
+    ```
+    
+    This generates the `./configure` script and related autotools files.
+  </Step>
+
+  <Step title="Configure the build">
+    ```bash
+    ./configure
+    ```
+    
+    By default, this will auto-detect available dependencies and enable corresponding features.
+    See [Configure Options](#configure-options) below for customization.
+  </Step>
+
+  <Step title="Compile the library">
+    ```bash
+    make
+    ```
+  </Step>
+
+  <Step title="Run tests (optional)">
+    ```bash
+    make check
+    ```
+  </Step>
+
+  <Step title="Install">
+    ```bash
+    sudo make install
+    ```
+    
+    By default, files are installed to `/usr/local/`. Use `--prefix` to change this.
+  </Step>
+</Steps>
+
+## Configure Options
+
+### Installation Paths
+
+| Option | Description |
+|--------|-------------|
+| `--prefix=PATH` | Installation prefix (default: `/usr/local`) |
+| `--exec-prefix=PATH` | Architecture-specific file prefix |
+| `--bindir=PATH` | User executables directory |
+| `--libdir=PATH` | Library files directory |
+| `--includedir=PATH` | Header files directory |
+
+### Symbology Support
+
+```bash
+--enable-codes=SYMS
+```
+
+Select which barcode symbologies to compile. Default is:
+`ean,databar,code128,code93,code39,codabar,i25,qrcode,sqcode`
+
+Available symbologies:
+- `ean` - EAN-13/UPC-A, UPC-E, EAN-8
+- `databar` - GS1 DataBar (RSS)
+- `code128` - Code 128
+- `code93` - Code 93
+- `code39` - Code 39
+- `codabar` - Codabar
+- `i25` - Interleaved 2 of 5
+- `qrcode` - QR Code
+- `sqcode` - SQ Code
+- `pdf417` - PDF417 (incomplete/experimental)
+- `all` - Enable all symbologies
+
+**Example:**
+```bash
+./configure --enable-codes=qrcode,code128,ean
+```
+
+### Core Features
+
+| Option | Description | Default |
+|--------|-------------|---------||
+| `--disable-pthread` | Disable threaded application support | enabled (except Windows) |
+| `--disable-video` | Exclude video scanner features (zbarcam) | enabled |
+| `--disable-doc` | Disable building documentation | enabled |
+
+### Video Options
+
+```bash
+--with-directshow     # Use DirectShow on Windows (instead of VfW)
+```
+
+### GUI Widget Support
+
+#### GTK
+
+```bash
+--with-gtk=VARIANT    # Values: no, auto, gtk2, gtk3 (default: auto)
+```
+
+- `gtk2` - Build with GTK+ 2.x
+- `gtk3` - Build with GTK+ 3.x
+- `auto` - Use latest available (prefers GTK 3)
+- `no` - Disable GTK widget
+
+#### Qt
+
+```bash
+--without-qt          # Disable Qt widget
+--with-qt6            # Enable experimental Qt6 support (currently broken)
+--enable-static-qt    # Produce static library for libzbarcam-qt
+```
+
+#### X Window System
+
+```bash
+--without-xshm        # Disable X shared memory extension
+--without-xv          # Disable XVideo extension
+--x-includes=DIR      # X include files location
+--x-libraries=DIR     # X library files location
+```
+
+### Language Bindings
+
+#### Python
+
+```bash
+--with-python=VARIANT # Values: no, auto, python2, python3 (default: auto)
+```
+
+Note: The `PYTHON` environment variable takes precedence if set.
+
+**Environment variables:**
+- `PYTHON` - Full path to Python interpreter
+- `PYTHON_CONFIG` - Full path to python-config
+- `PYTHON_CFLAGS` - Compiler flags for Python extensions
+- `PYTHON_LDFLAGS` - Linker flags for Python extensions
+
+#### PyGTK (Python 2 only)
+
+```bash
+PYGTK_H2DEF          # Full path to PyGTK h2def.py module
+PYGTK_CODEGEN        # Full path to pygtk-codegen program
+PYGTK_DEFS           # Directory where PyGTK definitions are found
+```
+
+#### GObject Introspection
+
+```bash
+--with-gir            # Enable GObject Introspection support (default: yes)
+```
+
+Required for Python 3 GTK widget support.
+
+#### Java
+
+```bash
+--without-java        # Disable Java interface
+```
+
+**Environment variables:**
+- `JAVA_HOME` - Root location of JDK
+- `JAVAC` - Java compiler location
+- `JAVAH` - Java header generator (Java 8 and earlier)
+- `JAR` - Java archive tool location
+- `JAVA` - Java application launcher
+- `CLASSPATH` - Java class path
+- `JAVA_CFLAGS` - Compiler flags for JNI extensions
+
+### Image Format Support
+
+```bash
+--without-jpeg           # Disable JPEG image conversions
+--without-imagemagick    # Disable ImageMagick (disables zbarimg)
+--with-graphicsmagick    # Use GraphicsMagick instead of ImageMagick
+```
+
+**Environment variables:**
+- `MAGICK_CFLAGS` - Compiler flags for ImageMagick/GraphicsMagick
+- `MAGICK_LIBS` - Linker flags for ImageMagick/GraphicsMagick
+
+### D-Bus Integration
+
+```bash
+--without-dbus           # Disable D-Bus support
+--with-dbusconfdir=PATH  # D-Bus config directory (default: auto-detected)
+```
+
+### Compilation Options
+
+**Environment variables:**
+
+```bash
+CC=c89                  # C compiler
+CFLAGS="-O2 -g"        # C compiler flags
+CXX=g++                 # C++ compiler
+CXXFLAGS="-O2 -g"      # C++ compiler flags
+CPPFLAGS="-I/path"     # Preprocessor flags
+LDFLAGS="-L/path"      # Linker flags
+LIBS="-lfoo"           # Additional libraries
+```
+
+**Example with custom flags:**
+```bash
+./configure CFLAGS="-O3 -march=native" CPPFLAGS="-I/opt/include" LDFLAGS="-L/opt/lib"
+```
+
+## Build Examples
+
+### Minimal Build
+
+Core library only, no GUI or language bindings:
+
+```bash
+./configure \
+  --disable-video \
+  --without-x \
+  --without-gtk \
+  --without-qt \
+  --without-python \
+  --without-java \
+  --without-imagemagick
+make
+```
+
+### Python 3 + GTK 3 Build
+
+```bash
+./configure \
+  --with-gtk=gtk3 \
+  --with-python=python3 \
+  --with-gir=yes
+make
+```
+
+### Qt5 Build with QR Code Only
+
+```bash
+./configure \
+  --with-qt=yes \
+  --without-gtk \
+  --enable-codes=qrcode
+make
+```
+
+### Cross-Compilation Build
+
+```bash
+./configure \
+  --host=arm-linux-gnueabihf \
+  --build=x86_64-linux-gnu \
+  --prefix=/opt/zbar-arm
+make
+```
+
+## Multiple Architecture Builds
+
+You can build for multiple architectures simultaneously using separate build directories:
+
+```bash
+# Create build directories
+mkdir build-debug build-release
+
+# Debug build
+cd build-debug
+../configure CFLAGS="-g -O0"
+make
+
+# Release build
+cd ../build-release
+../configure CFLAGS="-O3 -DNDEBUG"
+make
+```
+
+## Cleaning Build Artifacts
+
+```bash
+make clean              # Remove compiled objects and binaries
+make distclean          # Remove all generated files (for different architecture)
+make maintainer-clean   # Remove all generated files including autotools output
+```
+
+<Warning>
+  `make maintainer-clean` requires you to regenerate configure with `autoreconf -vfi`.
+</Warning>
+
+## Platform-Specific Notes
+
+### Linux
+
+- Ensure kernel headers are installed for Video4Linux support
+- libv4l is highly recommended for camera compatibility
+- Check that you have permissions to access `/dev/video*` devices
+
+### Windows (MinGW/Cygwin)
+
+- Use `--with-directshow` for better camera support than VfW
+- D-Bus is automatically disabled on Windows
+- Python extensions require `--no-undefined` linker flag (automatic)
+
+### macOS
+
+- Install dependencies via Homebrew or MacPorts
+- Video support requires additional drivers or frameworks
+- Some features may require SDK-specific configuration
+
+## Verifying Your Build
+
+After building, verify the configuration:
+
+```bash
+./configure --help     # View all available options
+./configure            # Run configuration
+# Check the summary at the end of configure output
+
+make check            # Run test suite
+./zbarimg/zbarimg examples/*.png  # Test image scanning
+```
+
+The configure script displays a summary of detected features:
+
+```
+please verify that the detected configuration matches your expectations:
+------------------------------------------------------------------------
+gettext                yes
+X                      --with-x=yes
+pthreads               --enable-pthread=yes
+doc                    --enable-doc=yes
+v4l                    --enable-video=yes
+jpeg                   --with-jpeg=yes
+Python                 --with-python=yes	python3.8
+GTK                    --with-gtk=gtk3	Gtk3.24.20
+GObject introspection  --with-gir=yes
+Qt                     --with-qt=yes	Qt5.12.8
+Java                   --with-java=no
+Dbus                   --with-dbus=yes
+ImageMagick            --with-imagemagick=yes
+Enabled codes:         ean databar code128 code93 code39 codabar i25 qrcode sqcode
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Contributing" icon="code-pull-request" href="./contributing">
+    Learn how to contribute code to ZBar Advanced
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="./troubleshooting">
+    Solutions to common build and runtime issues
+  </Card>
+</CardGroup>

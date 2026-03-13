@@ -1,0 +1,167 @@
+---
+title: Introduction
+description: Open source barcode reading library supporting multiple symbologies, video capture, and cross-platform integration
+---
+
+<div style={{
+  background: 'linear-gradient(135deg, #dc0a7d 0%, #0d8381 100%)',
+  padding: '60px 40px',
+  borderRadius: '0px',
+  marginBottom: '40px',
+  color: '#ffffff'
+}}>
+  <h1 style={{
+    fontFamily: 'Orbitron, sans-serif',
+    fontSize: '48px',
+    fontWeight: '700',
+    marginBottom: '20px',
+    color: '#ffffff'
+  }}>
+    ZBar Barcode Reader
+  </h1>
+  <p style={{
+    fontFamily: 'Arial, sans-serif',
+    fontSize: '20px',
+    marginBottom: '0',
+    color: '#ffffff'
+  }}>
+    Open source software suite for reading barcodes from various sources, including webcams and image files
+  </p>
+</div>
+
+## What is ZBar?
+
+ZBar is a comprehensive barcode scanning library that provides robust barcode detection and decoding capabilities across multiple platforms. Originally developed in 2007, the library continues to be actively maintained with support for modern video capture APIs and contemporary barcode formats.
+
+The library supports a wide range of 1D and 2D barcode symbologies including EAN-13/UPC-A, UPC-E, EAN-8, Code 128, Code 93, Code 39, Codabar, Interleaved 2 of 5, QR Code, and SQ Code.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Multi-Format Support" icon="barcode">
+    Decode EAN, UPC, Code 128, Code 93, Code 39, QR Code, and more
+  </Card>
+  <Card title="Video Capture" icon="video">
+    Real-time scanning from webcams using V4L2 on Linux
+  </Card>
+  <Card title="Cross-Platform" icon="desktop">
+    Support for Linux, Windows, and macOS
+  </Card>
+  <Card title="Multiple Language Bindings" icon="code">
+    C, C++, Python, Perl, and Java APIs available
+  </Card>
+  <Card title="GUI Widgets" icon="window-maximize">
+    Pre-built widgets for Qt and GTK applications
+  </Card>
+  <Card title="Command-Line Tools" icon="terminal">
+    zbarcam and zbarimg utilities for quick scanning
+  </Card>
+</CardGroup>
+
+## Quick Example
+
+Here's a simple example of scanning an image file using the C API:
+
+```c scan_image.c lines
+#include <stdio.h>
+#include <zbar.h>
+
+int main(int argc, char **argv)
+{
+    zbar_image_scanner_t *scanner;
+    zbar_image_t *image;
+    int n;
+
+    /* create a reader */
+    scanner = zbar_image_scanner_create();
+
+    /* configure the reader */
+    zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 1);
+
+    /* obtain image data */
+    image = zbar_image_create();
+    zbar_image_set_format(image, zbar_fourcc('Y','8','0','0'));
+    zbar_image_set_size(image, width, height);
+    zbar_image_set_data(image, raw_data, width * height, NULL);
+
+    /* scan the image for barcodes */
+    n = zbar_scan_image(scanner, image);
+
+    /* extract results */
+    const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+    for(; symbol; symbol = zbar_symbol_next(symbol)) {
+        zbar_symbol_type_t typ = zbar_symbol_get_type(symbol);
+        const char *data = zbar_symbol_get_data(symbol);
+        printf("decoded %s symbol \"%s\"\n",
+               zbar_get_symbol_name(typ), data);
+    }
+
+    /* clean up */
+    zbar_image_destroy(image);
+    zbar_image_scanner_destroy(scanner);
+
+    return 0;
+}
+```
+
+## Use Cases
+
+ZBar is ideal for:
+
+- **Retail Applications**: Point of sale systems, inventory management, and price checking
+- **Document Processing**: Automated document routing and tracking
+- **Access Control**: Badge and ticket scanning systems
+- **Mobile Applications**: QR code readers and product information lookups
+- **Logistics**: Package tracking and warehouse management
+- **Healthcare**: Patient identification and medication tracking
+
+## Architecture
+
+The ZBar library is structured in layers:
+
+**High-Level Interfaces**
+- Processor: Complete scanning solution with display window
+- GTK+ and Qt Widgets: GUI integration for applications
+
+**Mid-Level Components**
+- ImageScanner: Barcode detection in images
+- Video: Video device capture abstraction
+- Window: Display output abstraction
+
+**Low-Level Components**
+- Scanner: Intensity sample stream processing
+- Decoder: Bar and space width decoding
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install ZBar on your platform
+  </Card>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Build your first barcode scanner
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/overview">
+    Explore the complete API
+  </Card>
+  <Card title="Language Bindings" icon="language" href="/bindings/c-cpp">
+    Use ZBar in your preferred language
+  </Card>
+</CardGroup>
+
+## Community and Support
+
+ZBar is maintained by Mauro Carvalho Chehab and the open source community. The project is hosted on GitHub where you can:
+
+- Report bugs and request features
+- Contribute code improvements
+- Join discussions
+- Access pre-built binaries for multiple platforms
+
+<Note>
+  ZBar version 0.23+ includes significant improvements to the V4L2 video capture support, Python 3 compatibility, and GTK3 integration. Consider upgrading if you're using an older version.
+</Note>
+
+## License
+
+ZBar is released under the GNU Lesser General Public License (LGPL) version 2.1, allowing both open source and commercial use with appropriate attribution.

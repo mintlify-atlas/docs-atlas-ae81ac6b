@@ -1,0 +1,587 @@
+---
+title: Mobile Platforms
+description: Use ZBar Advanced on Android and iOS devices
+---
+
+ZBar Advanced provides native SDKs for both Android and iOS platforms, enabling barcode scanning in mobile applications.
+
+## Android Support
+
+The ZBar Android SDK provides JNI wrappers for integrating barcode scanning into Android applications.
+
+### Supported Features
+
+- EAN-13/UPC-A, UPC-E, EAN-8
+- Code 128, Code 93, Code 39
+- Codabar
+- Interleaved 2 of 5
+- QR Code
+- DataBar (RSS)
+- Camera integration for real-time scanning
+- Image file scanning
+
+### System Requirements
+
+- Android SDK
+- Android NDK (for building from source)
+- Java 7 or higher
+- Minimum Android API level: varies by ZBar version
+
+### Installation
+
+#### Option 1: Pre-built SDK
+
+1. **Download** the ZBar Android SDK:
+   ```
+   ZBar-Android-SDK-<version>.zip
+   ```
+
+2. **Extract the archive**
+
+3. **Add to Android project:**
+
+   <Tabs>
+     <Tab title="Command Line">
+       ```bash
+       cd <android-project>
+       cp -r ZBar-Android-SDK-<version>/libs .
+       ```
+     </Tab>
+     <Tab title="Android Studio">
+       1. Right-click on project
+       2. Select **Import → File System**
+       3. Browse to `ZBar-Android-SDK-<version>/libs`
+       4. Check "libs" folder and "Create top-level folder"
+       5. Click **Finish**
+     </Tab>
+   </Tabs>
+
+4. **Add to build path:**
+   - Right-click on `libs/zbar.jar`
+   - Select **Build Path → Add to Build Path**
+
+#### Option 2: Build from Source
+
+Building the Android SDK requires the NDK and iconv library.
+
+**Prerequisites:**
+```bash
+# Download iconv library
+wget http://www.gnu.org/software/libiconv/libiconv-<version>.tar.gz
+tar -xzf libiconv-<version>.tar.gz
+```
+
+**Build ZBar Android SDK:**
+```bash
+cd <zbar-source>/android
+
+# Update project
+android update project --path .
+
+# Build SDK
+ant -Dndk.dir=<NDK-path> \
+    -Diconv.src=<iconv-source-path> \
+    zbar-all
+```
+
+This generates:
+- `zbar.jar` - Java bindings
+- Native libraries for all architectures
+- `ZBarAndroidSDK.zip` - Complete SDK package
+
+**Clean build:**
+```bash
+ant -Dndk.dir=<NDK-path> zbar-clean
+```
+
+### Android API Usage
+
+#### Basic Image Scanning
+
+```java
+import net.sourceforge.zbar.*;
+
+// Create image scanner
+ImageScanner scanner = new ImageScanner();
+scanner.setConfig(0, Config.ENABLE, 0);  // Disable all
+scanner.setConfig(Symbol.QRCODE, Config.ENABLE, 1);  // Enable QR
+
+// Prepare image
+Image image = new Image(width, height, "Y800");
+image.setData(data);  // Raw grayscale image data
+
+// Scan image
+int result = scanner.scanImage(image);
+
+if (result != 0) {
+    // Get results
+    SymbolSet symbols = scanner.getResults();
+    for (Symbol sym : symbols) {
+        String data = sym.getData();
+        int type = sym.getType();
+        Log.d("ZBar", "Found: " + data);
+    }
+}
+```
+
+#### Camera Integration
+
+See the included examples for camera integration:
+```
+android/examples/CameraTest
+```
+
+The example demonstrates:
+- Camera preview setup
+- Real-time frame scanning
+- Result display
+- Permission handling
+
+#### Configuring Symbologies
+
+```java
+// Enable specific barcode types
+scanner.setConfig(Symbol.QRCODE, Config.ENABLE, 1);
+scanner.setConfig(Symbol.CODE128, Config.ENABLE, 1);
+scanner.setConfig(Symbol.EAN13, Config.ENABLE, 1);
+
+// Disable all others
+scanner.setConfig(Symbol.CODE39, Config.ENABLE, 0);
+
+// Configure scanner behavior
+scanner.setConfig(0, Config.X_DENSITY, 1);
+scanner.setConfig(0, Config.Y_DENSITY, 1);
+```
+
+### Android Permissions
+
+Add required permissions to `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-feature android:name="android.hardware.camera" />
+<uses-feature android:name="android.hardware.camera.autofocus" />
+```
+
+For Android 6.0+ (API 23+), request runtime permissions:
+
+```java
+if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+        != PackageManager.PERMISSION_GRANTED) {
+    ActivityCompat.requestPermissions(this,
+            new String[]{Manifest.permission.CAMERA},
+            CAMERA_PERMISSION_REQUEST);
+}
+```
+
+### Building Android Examples
+
+```bash
+cd android/examples/CameraTest
+
+# Setup project
+android update project --path .
+
+# Build and install
+ant debug install
+
+# Or with Gradle
+./gradlew installDebug
+```
+
+---
+
+## iOS Support
+
+The ZBar iOS SDK provides Objective-C wrappers and integrated widgets for barcode scanning on iPhone and iPad.
+
+### Supported Features
+
+- EAN-13/UPC-A, UPC-E, EAN-8
+- Code 128, Code 93, Code 39
+- Codabar
+- Interleaved 2 of 5
+- QR Code
+- DataBar (RSS)
+- Full-screen camera scanner
+- Embeddable scanner view
+- Image file scanning
+- iOS 7.0+ support
+
+### System Requirements
+
+- Xcode
+- iOS SDK 7.0 or later
+- Target device: iPhone, iPad, or iPod touch with camera
+
+### Installation
+
+#### Adding ZBarSDK to Xcode Project
+
+1. **Drag `ZBarSDK`** into your Xcode project navigator
+
+2. **Add required frameworks** to your target:
+   - `AVFoundation.framework` (weak link)
+   - `CoreMedia.framework` (weak link)
+   - `CoreVideo.framework` (weak link)
+   - `QuartzCore.framework`
+   - `libiconv.dylib`
+
+3. **Weak linking** (for iOS version compatibility):
+   - Select framework → Build Phases → Link Binary With Libraries
+   - Set AVFoundation, CoreMedia, CoreVideo to **Optional**
+
+#### Framework Locations
+
+The iOS SDK is included in the ZBar source distribution:
+```
+zbar-source/iphone/
+```
+
+Components:
+- SDK headers in `include/`
+- Pre-built framework (if available)
+- Example projects in `examples/`
+- Documentation in `doc/`
+
+### iOS API Usage
+
+#### Full-Screen Scanner (Quick Implementation)
+
+```objective-c
+#import <ZBarSDK/ZBarSDK.h>
+
+@interface MyViewController : UIViewController <ZBarReaderDelegate>
+@end
+
+@implementation MyViewController
+
+- (IBAction)scanButtonTapped {
+    // Create reader
+    ZBarReaderViewController *reader = [ZBarReaderViewController new];
+    reader.readerDelegate = self;
+    
+    // Configure scanner
+    ZBarImageScanner *scanner = reader.scanner;
+    [scanner setSymbology:ZBAR_I25
+                   config:ZBAR_CFG_ENABLE
+                       to:0];  // Disable I25
+    [scanner setSymbology:ZBAR_QRCODE
+                   config:ZBAR_CFG_ENABLE
+                       to:1];  // Enable QR codes
+    
+    // Present scanner
+    [self presentViewController:reader 
+                        animated:YES 
+                      completion:nil];
+}
+
+// Handle scan results
+- (void)imagePickerController:(UIImagePickerController *)picker
+        didFinishPickingMediaWithInfo:(NSDictionary *)info {
+    // Get scanned results
+    id<NSFastEnumeration> results = 
+        [info objectForKey:ZBarReaderControllerResults];
+    
+    ZBarSymbol *symbol = nil;
+    for (symbol in results) break;  // Get first result
+    
+    NSString *data = symbol.data;
+    NSLog(@"Scanned: %@", data);
+    
+    // Dismiss scanner
+    [picker dismissViewControllerAnimated:YES completion:nil];
+}
+
+@end
+```
+
+#### Embedded Scanner View
+
+```objective-c
+#import <ZBarSDK/ZBarSDK.h>
+
+@interface MyViewController : UIViewController <ZBarReaderViewDelegate>
+@property (nonatomic, strong) ZBarReaderView *readerView;
+@end
+
+@implementation MyViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    // Create reader view
+    self.readerView = [[ZBarReaderView alloc] init];
+    self.readerView.readerDelegate = self;
+    
+    // Configure scanner
+    [self.readerView.scanner setSymbology:ZBAR_QRCODE
+                                   config:ZBAR_CFG_ENABLE
+                                       to:1];
+    
+    // Add to view hierarchy
+    [self.view addSubview:self.readerView];
+    
+    // Start scanning
+    [self.readerView start];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [self.readerView stop];
+    [super viewWillDisappear:animated];
+}
+
+// Handle results
+- (void)readerView:(ZBarReaderView *)readerView
+     didReadSymbols:(ZBarSymbolSet *)symbols
+          fromImage:(UIImage *)image {
+    for (ZBarSymbol *symbol in symbols) {
+        NSLog(@"Scanned: %@", symbol.data);
+    }
+}
+
+@end
+```
+
+#### Scanning from Image
+
+```objective-c
+#import <ZBarSDK/ZBarSDK.h>
+
+// Create scanner
+ZBarImageScanner *scanner = [[ZBarImageScanner alloc] init];
+[scanner setSymbology:ZBAR_QRCODE
+               config:ZBAR_CFG_ENABLE
+                   to:1];
+
+// Load image
+UIImage *image = [UIImage imageNamed:@"barcode.png"];
+ZBarImage *zbarImage = [ZBarImage imageWithCGImage:image.CGImage];
+
+// Scan
+int result = [scanner scanImage:zbarImage];
+
+if (result > 0) {
+    ZBarSymbolSet *symbols = scanner.results;
+    for (ZBarSymbol *symbol in symbols) {
+        NSString *data = symbol.data;
+        ZBarSymbolType type = symbol.type;
+        NSLog(@"Found %@ barcode: %@", 
+              [ZBarImage nameForType:type], data);
+    }
+}
+```
+
+#### Configuring Scanner Options
+
+```objective-c
+// Symbology configuration
+[scanner setSymbology:ZBAR_QRCODE 
+               config:ZBAR_CFG_ENABLE 
+                   to:1];
+[scanner setSymbology:ZBAR_CODE128 
+               config:ZBAR_CFG_ENABLE 
+                   to:1];
+[scanner setSymbology:ZBAR_EAN13 
+               config:ZBAR_CFG_ENABLE 
+                   to:1];
+
+// Scanner density (affects performance vs accuracy)
+[scanner setSymbology:0 
+               config:ZBAR_CFG_X_DENSITY 
+                   to:2];
+[scanner setSymbology:0 
+               config:ZBAR_CFG_Y_DENSITY 
+                   to:2];
+
+// Reader view options
+readerView.tracksSymbols = YES;  // Visual tracking
+readerView.torchMode = 1;        // Enable flash
+readerView.scanCrop = CGRectMake(0.1, 0.2, 0.8, 0.6);  // Scan region
+```
+
+### iOS Examples
+
+The iOS SDK includes several example projects:
+
+```
+iphone/examples/
+  ├── ReaderSample/     # Tutorial walkthrough
+  ├── readertest/       # Configuration options demo
+  ├── TabReader/        # UITabBarController integration
+  └── EmbedReader/      # Embedded ZBarReaderView
+```
+
+Open any example in Xcode:
+```bash
+open iphone/examples/ReaderSample/ReaderSample.xcodeproj
+```
+
+### iOS Privacy Permissions
+
+Add camera usage description to `Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>This app needs camera access to scan barcodes</string>
+```
+
+For iOS 10+, this is **required** or the app will crash when accessing the camera.
+
+---
+
+## Cross-Platform Considerations
+
+### Performance Optimization
+
+Both platforms benefit from:
+- **Limiting enabled symbologies** - Only enable barcode types you need
+- **Scan density settings** - Lower density = faster scanning
+- **Image resolution** - Lower resolution = faster processing
+- **Region of interest** - Scan only part of the frame
+
+### Battery Efficiency
+
+**Android:**
+```java
+// Stop scanning when not visible
+@Override
+protected void onPause() {
+    super.onPause();
+    camera.stopPreview();
+}
+```
+
+**iOS:**
+```objective-c
+// Stop reader view
+- (void)viewWillDisappear:(BOOL)animated {
+    [self.readerView stop];
+    [super viewWillDisappear:animated];
+}
+```
+
+### Orientation Handling
+
+Both SDKs handle device orientation automatically, but you may need to:
+- Lock orientation for optimal scanning
+- Handle rotation in embedded views
+- Adjust scan regions after rotation
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Android: Native library not found">
+    Ensure native libraries are properly included:
+    ```
+    libs/
+      armeabi/
+        libiconv.so
+        libzbarjni.so
+      armeabi-v7a/
+        libiconv.so
+        libzbarjni.so
+      x86/
+        libiconv.so
+        libzbarjni.so
+    ```
+    
+    Check that `System.loadLibrary("iconv")` and `System.loadLibrary("zbarjni")` are called.
+  </Accordion>
+
+  <Accordion title="iOS: Framework not found">
+    Verify frameworks are added:
+    - Target → Build Phases → Link Binary With Libraries
+    - Check AVFoundation, CoreMedia, CoreVideo are included
+    - Set media frameworks to "Optional" (weak linking)
+  </Accordion>
+
+  <Accordion title="Camera preview shows black screen">
+    **Android:**
+    - Check camera permissions granted
+    - Verify camera preview size is supported
+    - Test on physical device (not emulator)
+    
+    **iOS:**
+    - Add camera usage description to Info.plist
+    - Check camera permission granted
+    - Ensure reader view is started: `[readerView start]`
+  </Accordion>
+
+  <Accordion title="Poor scanning performance">
+    - Reduce enabled symbologies
+    - Lower scan density:
+      ```java
+      // Android
+      scanner.setConfig(0, Config.X_DENSITY, 1);
+      ```
+      ```objective-c
+      // iOS
+      [scanner setSymbology:0 config:ZBAR_CFG_X_DENSITY to:1];
+      ```
+    - Use lower camera resolution
+    - Implement scan region cropping
+  </Accordion>
+
+  <Accordion title="Symbols not detected">
+    - Ensure symbology is enabled
+    - Check barcode quality and lighting
+    - Increase scan density (slower but more accurate)
+    - Try different focus modes
+    - Ensure barcode is within scan region
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Additional Resources
+
+### Documentation
+
+- **Android SDK**: See `android/README` in source distribution
+- **iOS SDK**: See `iphone/Documentation.html`
+- **API Reference**: Check platform-specific headers
+
+### Example Projects
+
+<CardGroup cols={2}>
+  <Card title="Android CameraTest" icon="android">
+    Basic camera integration example
+    
+    `android/examples/CameraTest`
+  </Card>
+  <Card title="iOS ReaderSample" icon="apple">
+    Complete tutorial walkthrough
+    
+    `iphone/examples/ReaderSample`
+  </Card>
+  <Card title="iOS TabReader" icon="mobile">
+    Tab bar integration
+    
+    `iphone/examples/TabReader`
+  </Card>
+  <Card title="iOS EmbedReader" icon="mobile-screen">
+    Embedded view example
+    
+    `iphone/examples/EmbedReader`
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Start scanning barcodes
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Optimize scanner settings
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Complete API documentation
+  </Card>
+  <Card title="Examples" icon="book" href="/quickstart">
+    More code examples
+  </Card>
+</CardGroup>

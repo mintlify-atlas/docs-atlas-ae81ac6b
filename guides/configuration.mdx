@@ -1,0 +1,464 @@
+---
+title: Configuration
+description: Configure ZBar scanner behavior, symbology support, and quality settings
+---
+
+ZBar provides extensive configuration options to control which barcode types are detected and how the scanner behaves. This guide covers the configuration API and all available settings.
+
+## Configuration API
+
+All ZBar components support configuration through a consistent API:
+
+```c
+/* Set configuration programmatically */
+int zbar_image_scanner_set_config(zbar_image_scanner_t *scanner,
+                                   zbar_symbol_type_t symbology,
+                                   zbar_config_t config,
+                                   int value);
+
+/* Parse configuration string */
+int zbar_parse_config(const char *config_string,
+                      zbar_symbol_type_t *symbology,
+                      zbar_config_t *config,
+                      int *value);
+```
+
+### Configuration String Format
+
+The configuration string format is `[symbology.]config[=value]`:
+
+```c ~/workspace/source/zbar/config.c
+/* Format: [symbology.]config[=value] */
+
+/* Enable all symbologies */
+zbar_image_scanner_parse_config(scanner, "*.enable=1");
+
+/* Enable only QR codes */
+zbar_image_scanner_parse_config(scanner, "qrcode.enable=1");
+
+/* Set Code 128 minimum length */
+zbar_image_scanner_parse_config(scanner, "code128.min-length=10");
+
+/* Disable with 'no-' prefix */
+zbar_image_scanner_parse_config(scanner, "ean13.no-enable");
+```
+
+**Components:**
+- **symbology** (optional): Specific barcode type or `*` for all
+- **config**: Configuration parameter name
+- **value** (optional): Configuration value (defaults to 1 if omitted)
+
+## Symbology Names
+
+Supported symbology identifiers:
+
+```c ~/workspace/source/zbar/config.c
+/* 1D Barcodes */
+"upca"       // UPC-A
+"upce"       // UPC-E  
+"ean13"      // EAN-13
+"ean8"       // EAN-8
+"ean2"       // EAN-2 (add-on)
+"ean5"       // EAN-5 (add-on)
+"isbn10"     // ISBN-10
+"isbn13"     // ISBN-13
+"i25"        // Interleaved 2 of 5
+"code39"     // Code 39
+"code93"     // Code 93
+"code128"    // Code 128
+"codabar"    // Codabar
+"databar"    // GS1 DataBar (RSS)
+"db"         // Alias for databar
+"databar-exp" // GS1 DataBar Expanded
+"db-exp"     // Alias for databar-exp
+
+/* 2D Barcodes */
+"qrcode"     // QR Code
+"sqcode"     // SQ Code  
+"pdf417"     // PDF417
+
+/* Special */
+"composite"  // EAN/UPC composite
+"*"          // All symbologies
+"scanner"    // Scanner-specific settings
+```
+
+## Configuration Parameters
+
+All available configuration options:
+
+### ZBAR_CFG_ENABLE
+
+Enable or disable a symbology:
+
+```c ~/workspace/source/include/zbar.h
+/* Disable all, enable only QR codes */
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 0);
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+
+/* Using configuration strings */
+zbar_image_scanner_parse_config(scanner, "*.disable");
+zbar_image_scanner_parse_config(scanner, "qrcode.enable");
+```
+
+**Values:**
+- `0` - Disable symbology
+- `1` - Enable symbology (default)
+
+### ZBAR_CFG_MIN_LEN / ZBAR_CFG_MAX_LEN
+
+Set minimum and maximum decoded data length:
+
+```c ~/workspace/source/include/zbar.h
+/* Code 128: accept only 8-20 character barcodes */
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_MIN_LEN, 8);
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_MAX_LEN, 20);
+
+/* Using configuration strings */
+zbar_image_scanner_parse_config(scanner, "code128.min-length=8");
+zbar_image_scanner_parse_config(scanner, "code128.max-length=20");
+```
+
+**Use cases:**
+- Filter out damaged or partial reads
+- Enforce application-specific barcode formats
+- Reduce false positives
+
+### ZBAR_CFG_UNCERTAINTY
+
+Required video consistency frames for reporting results:
+
+```c ~/workspace/source/include/zbar.h
+/* Require symbol to be detected in 3 consecutive frames */
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_UNCERTAINTY, 3);
+```
+
+Higher values:
+- Reduce false positives in video streams
+- Increase reliability at cost of latency
+- Best for noisy environments
+
+**Default:** Varies by symbology (typically 0-2)
+
+### ZBAR_CFG_X_DENSITY / ZBAR_CFG_Y_DENSITY
+
+Control scan line density:
+
+```c ~/workspace/source/include/zbar.h
+/* Scan every 2nd column (X) and row (Y) */
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_X_DENSITY, 2);
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_Y_DENSITY, 2);
+
+/* Using configuration strings */
+zbar_image_scanner_parse_config(scanner, "*.x-density=2");
+zbar_image_scanner_parse_config(scanner, "*.y-density=2");
+```
+
+**Values:**
+- `1` - Maximum density (scan every line)
+- `2` - Scan every 2nd line
+- `3` - Scan every 3rd line
+- etc.
+
+**Trade-offs:**
+- Lower density (higher value) = faster, may miss small barcodes
+- Higher density (lower value) = slower, better detection
+
+### ZBAR_CFG_TEST_INVERTED
+
+Attempt to decode inverted barcodes (light bars on dark background):
+
+```c ~/workspace/source/include/zbar.h
+/* Enable inverted barcode detection */
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_TEST_INVERTED, 1);
+
+/* Using configuration string */
+zbar_image_scanner_parse_config(scanner, "*.test-inverted=1");
+```
+
+**Values:**
+- `0` - Normal barcodes only (default)
+- `1` - Test inverted if normal decode fails
+
+**Performance:** Enabling this roughly doubles processing time.
+
+### ZBAR_CFG_POSITION
+
+Enable position data collection:
+
+```c ~/workspace/source/include/zbar.h
+/* Enable position data */
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_POSITION, 1);
+```
+
+When enabled, symbols include polygon location data accessible via:
+```c
+unsigned n = zbar_symbol_get_loc_size(symbol);
+for (unsigned i = 0; i < n; i++) {
+    int x = zbar_symbol_get_loc_x(symbol, i);
+    int y = zbar_symbol_get_loc_y(symbol, i);
+}
+```
+
+### ZBAR_CFG_BINARY
+
+Don't convert binary data to text:
+
+```c ~/workspace/source/include/zbar.h
+/* Preserve binary data */
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_BINARY, 1);
+```
+
+Use with `zbar_symbol_get_data_length()` for binary content.
+
+### ZBAR_CFG_ASCII
+
+Enable full ASCII character set (Code 39):
+
+```c ~/workspace/source/include/zbar.h
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_ASCII, 1);
+```
+
+### ZBAR_CFG_ADD_CHECK / ZBAR_CFG_EMIT_CHECK
+
+Control check digit handling:
+
+```c ~/workspace/source/include/zbar.h
+/* Enable optional check digit */
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_ADD_CHECK, 1);
+
+/* Include check digit in output */
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, ZBAR_CFG_EMIT_CHECK, 1);
+```
+
+## Configuration Examples
+
+### Example: QR Codes Only
+
+```c
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+
+/* Disable all symbologies */
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 0);
+
+/* Enable only QR codes */
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+```
+
+Or using configuration strings:
+```c
+zbar_image_scanner_parse_config(scanner, "*.enable=0");
+zbar_image_scanner_parse_config(scanner, "qrcode.enable=1");
+```
+
+### Example: Fast Video Scanning
+
+```c
+zbar_processor_t *proc = zbar_processor_create(1);
+
+/* Reduce scan density for speed */
+zbar_processor_parse_config(proc, "*.x-density=2");
+zbar_processor_parse_config(proc, "*.y-density=2");
+
+/* Enable result caching */
+zbar_image_scanner_enable_cache(proc->scanner, 1);
+
+/* Lower resolution */
+zbar_processor_request_size(proc, 640, 480);
+```
+
+### Example: High Reliability Mode
+
+```c
+/* Require detection in 5 consecutive frames */
+zbar_image_scanner_parse_config(scanner, "*.uncertainty=5");
+
+/* Maximum scan density */
+zbar_image_scanner_parse_config(scanner, "*.x-density=1");
+zbar_image_scanner_parse_config(scanner, "*.y-density=1");
+
+/* Test inverted barcodes */
+zbar_image_scanner_parse_config(scanner, "*.test-inverted=1");
+```
+
+### Example: Application-Specific Format
+
+```c
+/* Only accept Code 128 barcodes with exactly 12 characters */
+zbar_image_scanner_parse_config(scanner, "*.enable=0");
+zbar_image_scanner_parse_config(scanner, "code128.enable=1");
+zbar_image_scanner_parse_config(scanner, "code128.min-length=12");
+zbar_image_scanner_parse_config(scanner, "code128.max-length=12");
+```
+
+## Command-Line Configuration
+
+Using zbarcam with configuration:
+
+```bash ~/workspace/source/zbarcam/zbarcam.c
+# Enable only QR codes
+zbarcam --set '*.enable=0' --set 'qrcode.enable=1' /dev/video0
+
+# Short form
+zbarcam -S '*.enable=0' -S 'qrcode.enable=1' /dev/video0
+
+# Multiple settings
+zbarcam \
+  --set '*.x-density=2' \
+  --set '*.y-density=2' \
+  --set 'code128.min-length=8' \
+  /dev/video0
+```
+
+## Configuration Parsing
+
+The `zbar_parse_config()` function parses configuration strings:
+
+```c ~/workspace/source/zbar/config.c
+int zbar_parse_config(const char *cfgstr, 
+                      zbar_symbol_type_t *sym,
+                      zbar_config_t *cfg, 
+                      int *val)
+{
+    const char *dot, *eq;
+    
+    /* Parse symbology prefix */
+    dot = strchr(cfgstr, '.');
+    if (dot) {
+        int len = dot - cfgstr;
+        if (!len || (len == 1 && !strncmp(cfgstr, "*", len)))
+            *sym = 0;  // All symbologies
+        else if (!strncmp(cfgstr, "qrcode", len))
+            *sym = ZBAR_QRCODE;
+        // ... etc
+        cfgstr = dot + 1;
+    } else
+        *sym = 0;
+    
+    /* Parse config name and value */
+    eq = strchr(cfgstr, '=');
+    if (eq) {
+        *val = strtol(eq + 1, NULL, 0);
+    } else {
+        *val = 1;  // Default value
+    }
+    
+    /* Handle 'no-' prefix for negation */
+    if (len > 3 && !strncmp(cfgstr, "no-", 3)) {
+        cfgstr += 3;
+        *val = !*val;
+    }
+    
+    /* Match config parameter */
+    if (!strncmp(cfgstr, "enable", len))
+        *cfg = ZBAR_CFG_ENABLE;
+    else if (!strncmp(cfgstr, "min-length", len))
+        *cfg = ZBAR_CFG_MIN_LEN;
+    // ... etc
+    
+    return (0);
+}
+```
+
+### Helper Functions
+
+Each component provides a `parse_config` helper:
+
+```c ~/workspace/source/include/zbar.h
+static inline int zbar_processor_parse_config(zbar_processor_t *processor,
+                                              const char *config_string)
+{
+    zbar_symbol_type_t sym;
+    zbar_config_t cfg;
+    int val;
+    return (zbar_parse_config(config_string, &sym, &cfg, &val) ||
+            zbar_processor_set_config(processor, sym, cfg, val));
+}
+```
+
+Similarly for:
+- `zbar_image_scanner_parse_config()`
+- `zbar_decoder_parse_config()`
+
+## Getting Configuration
+
+Retrieve current configuration values:
+
+```c ~/workspace/source/include/zbar.h
+/* Get configuration value */
+int value;
+if (zbar_image_scanner_get_config(scanner, ZBAR_QRCODE, 
+                                   ZBAR_CFG_ENABLE, &value) == 0) {
+    printf("QR Code enabled: %d\n", value);
+}
+```
+
+Available since version 0.22.
+
+## Performance Tuning
+
+<Tabs>
+  <Tab title="Speed">
+    Optimize for fastest scanning:
+    
+    ```c
+    /* Reduce scan density */
+    zbar_image_scanner_parse_config(scanner, "*.x-density=3");
+    zbar_image_scanner_parse_config(scanner, "*.y-density=3");
+    
+    /* Enable only required symbologies */
+    zbar_image_scanner_parse_config(scanner, "*.enable=0");
+    zbar_image_scanner_parse_config(scanner, "qrcode.enable=1");
+    
+    /* Disable inverted test */
+    zbar_image_scanner_parse_config(scanner, "*.test-inverted=0");
+    
+    /* Lower resolution */
+    zbar_processor_request_size(proc, 320, 240);
+    ```
+  </Tab>
+  
+  <Tab title="Accuracy">
+    Optimize for maximum detection:
+    
+    ```c
+    /* Maximum scan density */
+    zbar_image_scanner_parse_config(scanner, "*.x-density=1");
+    zbar_image_scanner_parse_config(scanner, "*.y-density=1");
+    
+    /* Test inverted barcodes */
+    zbar_image_scanner_parse_config(scanner, "*.test-inverted=1");
+    
+    /* Higher uncertainty for reliability */
+    zbar_image_scanner_parse_config(scanner, "*.uncertainty=3");
+    
+    /* Higher resolution */
+    zbar_processor_request_size(proc, 1280, 720);
+    ```
+  </Tab>
+  
+  <Tab title="Balanced">
+    Balance between speed and accuracy:
+    
+    ```c
+    /* Moderate scan density */
+    zbar_image_scanner_parse_config(scanner, "*.x-density=2");
+    zbar_image_scanner_parse_config(scanner, "*.y-density=2");
+    
+    /* Standard resolution */
+    zbar_processor_request_size(proc, 640, 480);
+    
+    /* Enable caching for video */
+    zbar_image_scanner_enable_cache(scanner, 1);
+    
+    /* Moderate uncertainty */
+    zbar_image_scanner_parse_config(scanner, "*.uncertainty=2");
+    ```
+  </Tab>
+</Tabs>
+
+## See Also
+
+- [Scanning Images](/guides/scanning-images) - Use configuration with ImageScanner
+- [Video Scanning](/guides/video-scanning) - Configure video scanning
+- [Integration](/guides/integration) - Error handling and validation

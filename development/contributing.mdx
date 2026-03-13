@@ -1,0 +1,413 @@
+---
+title: Contributing
+description: How to contribute to ZBar Advanced development
+---
+
+Thank you for your interest in contributing to ZBar Advanced! This guide will help you get started with contributing code, documentation, bug reports, and more.
+
+## Getting Started
+
+### Download Source Code
+
+ZBar is hosted on multiple Git platforms:
+
+<CardGroup cols={3}>
+  <Card title="GitHub" icon="github" href="https://github.com/mchehab/zbar">
+    Primary development repository
+  </Card>
+  <Card title="LinuxTV" icon="tv" href="https://git.linuxtv.org/zbar.git/">
+    Mirror with Cgit interface
+  </Card>
+  <Card title="GitLab" icon="gitlab" href="https://gitlab.com/mchehab/zbar">
+    Mirror repository
+  </Card>
+</CardGroup>
+
+**Clone the repository:**
+
+```bash
+git clone https://github.com/mchehab/zbar.git
+cd zbar
+autoreconf -vfi
+```
+
+### Development Environment Setup
+
+You'll need recent versions of GNU autotools installed:
+
+| Tool | Minimum Version | Tested Version |
+|------|----------------|----------------|
+| autoconf | 2.61 | 2.61+ |
+| automake | 1.10.1 | 1.10.1+ |
+| libtool | 2.2.6 | 2.2.6+ |
+| gettext | 0.18.1.1 | 0.18.1.1+ |
+| pkg-config | 0.25 | 0.25+ |
+| xmlto | 0.0.20 | 0.0.20-5 (for docs) |
+
+<Warning>
+  All autotools must be installed in the same prefix (e.g., all in `/usr/bin` or all in `/usr/local/bin`). Mixing prefixes can cause configuration errors.
+</Warning>
+
+**Install on Debian/Ubuntu:**
+```bash
+sudo apt-get install autoconf autopoint pkg-config libtool gcc make \
+  libv4l-dev libmagickwand-dev libgtk-3-dev python3-dev
+```
+
+**Install on Fedora/RHEL:**
+```bash
+sudo dnf install autoconf gettext-devel pkg-config libtool gcc make \
+  v4l-utils-devel ImageMagick-devel gtk3-devel python3-devel
+```
+
+## Making Changes
+
+### Create a Feature Branch
+
+```bash
+git checkout -b feature/my-new-feature
+# or
+git checkout -b fix/issue-123
+```
+
+### Build and Test
+
+Before making changes, ensure you can build successfully:
+
+```bash
+autoreconf -vfi
+./configure
+make
+make check
+```
+
+After making your changes:
+
+```bash
+make clean
+make
+make check
+```
+
+### Code Testing
+
+- Run the test suite: `make check`
+- Test with example images: `./zbarimg/zbarimg examples/*.png`
+- If you added video features, test with: `./zbarcam/zbarcam`
+- For D-Bus testing, see [D-Bus Testing](#dbus-testing) below
+
+## Coding Standards
+
+### Code Style
+
+- **Indentation:** Use tabs for indentation (8-character width)
+- **Line Length:** Keep lines under 80 characters when practical
+- **Braces:** Opening brace on same line for functions
+- **Naming:** Use lowercase with underscores for functions and variables
+- **Comments:** Use C-style comments (`/* */`) for multi-line, `//` for single line
+
+**Example:**
+```c
+static int zbar_process_image(zbar_image_scanner_t *iscn,
+                               zbar_image_t *img)
+{
+    int result = 0;
+    
+    /* Process the image data */
+    if (img && img->data) {
+        result = scan_image(iscn, img);
+    }
+    
+    return result;
+}
+```
+
+### API Guidelines
+
+- **Prefix:** All public API functions should be prefixed with `zbar_`
+- **Error Handling:** Use the error system defined in `zbar/error.h`
+- **Memory Management:** Document ownership of allocated memory
+- **Thread Safety:** Document thread-safety guarantees for new APIs
+
+### Documentation
+
+- Add Doxygen comments for all public API functions
+- Update man pages if adding command-line options
+- Include examples in documentation
+
+**Example Doxygen comment:**
+```c
+/**
+ * @brief Scan an image for barcodes
+ * @param scanner the image scanner instance
+ * @param image the image to scan
+ * @return number of symbols decoded, or -1 on error
+ * @since 0.23
+ */
+int zbar_scan_image(zbar_image_scanner_t *scanner,
+                    zbar_image_t *image);
+```
+
+## Submitting Patches
+
+### Write Good Commit Messages
+
+<Steps>
+  <Step title="Summary line">
+    Start with a short (50-72 characters) summary of the change.
+    Use the imperative mood: "Fix bug" not "Fixed bug" or "Fixes bug".
+    
+    ```
+    decoder: Add support for Code 128 Subset C
+    ```
+  </Step>
+
+  <Step title="Detailed description">
+    Add a blank line, then provide details about:
+    - **Why** the change is needed
+    - **What** the change does
+    - **How** it solves the problem
+    
+    ```
+    The decoder was unable to process Code 128 barcodes using
+    Subset C encoding for numeric data. This adds support for
+    recognizing and decoding the Subset C start code and properly
+    handling numeric pairs.
+    
+    This improves decode performance for numeric barcodes by 15%.
+    ```
+  </Step>
+
+  <Step title="Add sign-off">
+    All patches must include a Developer's Certificate of Origin sign-off:
+    
+    ```
+    Signed-off-by: Your Name <your@email.com>
+    ```
+    
+    This certifies that you wrote the code or have the right to submit it.
+    See: https://linuxtv.org/wiki/index.php/Development:_Submitting_Patches#Developer.27s_Certificate_of_Origin_1.1
+  </Step>
+</Steps>
+
+**Complete example:**
+```
+decoder: Add support for Code 128 Subset C
+
+The decoder was unable to process Code 128 barcodes using
+Subset C encoding for numeric data. This adds support for
+recognizing and decoding the Subset C start code and properly
+handling numeric pairs.
+
+This improves decode performance for numeric barcodes by 15%.
+
+Fixes: #123
+Signed-off-by: John Developer <john@example.com>
+```
+
+### Developer's Certificate of Origin
+
+By adding your `Signed-off-by` line, you certify that:
+
+1. You wrote the code or have the right to submit it under the project's license
+2. You understand the contribution is public and recorded with your identity
+3. You agree to the Developer's Certificate of Origin 1.1
+
+Full text: https://linuxtv.org/wiki/index.php/Development:_Submitting_Patches#Developer.27s_Certificate_of_Origin_1.1
+
+### Submission Methods
+
+<Tabs>
+  <Tab title="GitHub Pull Request (Preferred)">
+    1. Fork the repository on GitHub
+    2. Create a feature branch
+    3. Make your changes and commit
+    4. Push to your fork
+    5. Open a Pull Request against the `master` branch
+    
+    ```bash
+    git checkout -b feature/my-feature
+    # make changes
+    git add .
+    git commit -s -m "subsystem: Add new feature"
+    git push origin feature/my-feature
+    # Open PR on GitHub
+    ```
+  </Tab>
+
+  <Tab title="GitLab Merge Request">
+    1. Fork the repository on GitLab
+    2. Create a feature branch
+    3. Make your changes and commit
+    4. Push to your fork
+    5. Open a Merge Request
+    
+    Process is similar to GitHub.
+  </Tab>
+
+  <Tab title="Email Patch">
+    Send patches to the linux-media mailing list:
+    
+    **To:** linux-media@vger.kernel.org
+    
+    **Subject:** `[PATCH ZBar] subsystem: brief description`
+    
+    ```bash
+    # Generate patch file
+    git format-patch -1 HEAD
+    
+    # Or use git send-email
+    git send-email \
+      --to=linux-media@vger.kernel.org \
+      --subject-prefix="PATCH ZBar" \
+      0001-my-patch.patch
+    ```
+    
+    <Note>
+      Use `[PATCH ZBar]` prefix so patches aren't confused with kernel patches.
+    </Note>
+  </Tab>
+</Tabs>
+
+## D-Bus Testing
+
+If your changes affect D-Bus integration, test them:
+
+### Monitor D-Bus Events
+
+```bash
+# Terminal 1: Monitor D-Bus
+dbus-monitor --system interface=org.linuxtv.Zbar1.Code
+```
+
+### Build Test Programs
+
+```bash
+make test_progs
+```
+
+### Run D-Bus Test
+
+```bash
+# Terminal 2: Run test receiver
+./test/test_dbus
+```
+
+Output:
+```
+Waiting for Zbar events
+```
+
+```bash
+# Terminal 3: Scan a barcode
+./zbarimg/zbarimg examples/code-128.png
+```
+
+You should see in Terminal 2:
+```
+Type = CODE-128
+Value = https://github.com/mchehab/zbar
+```
+
+## Continuous Integration
+
+ZBar uses GitHub Actions and Travis CI for automated testing:
+
+- **GitHub Actions:** Tests on Ubuntu, Windows, macOS
+- **Travis CI:** https://travis-ci.org/github/mchehab/zbar/
+
+Check the build status on your PR. Build scripts are in:
+- `.github/workflows/`
+- `.travis.yml`
+- `travis/` directory
+
+## Reporting Issues
+
+Before submitting code, check if there's a related issue:
+
+https://github.com/mchehab/zbar/issues
+
+### Bug Reports Should Include
+
+- ZBar version number (`zbarcam --version` or from `configure.ac`)
+- Operating system and version
+- Hardware details (for camera/video issues)
+- Steps to reproduce
+- Expected vs. actual behavior
+- Sample images or barcodes (if applicable)
+- Build configuration (output of `./configure`)
+- Error messages or stack traces
+
+**Good bug report example:**
+```
+Title: zbarcam fails to open /dev/video0 on Ubuntu 22.04
+
+ZBar version: 0.23.93
+OS: Ubuntu 22.04 LTS
+Camera: Logitech C920
+
+Steps to reproduce:
+1. Build with: ./configure --enable-video
+2. Run: zbarcam /dev/video0
+
+Expected: Camera opens and displays video
+Actual: Error "unable to open video device"
+
+Error message:
+ERROR: unable to access your video device
+ERROR: (video) opening /dev/video0: Permission denied
+
+Additional info:
+- User is in 'video' group
+- Same command works with zbarcam 0.23.1
+- Camera works with other applications (cheese, vlc)
+```
+
+## Review Process
+
+1. **Submission:** You submit a PR or patch
+2. **Automated Tests:** CI runs build and test suite
+3. **Code Review:** Maintainers review your code
+4. **Feedback:** You may be asked to make changes
+5. **Revision:** Update your patch based on feedback
+6. **Acceptance:** Once approved, code is merged
+
+### Revision Tips
+
+```bash
+# Make changes based on feedback
+git add <files>
+git commit --amend
+git push --force origin feature/my-feature
+```
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Smart Questions" icon="question" href="http://www.catb.org/~esr/faqs/smart-questions.html">
+    How to ask questions effectively
+  </Card>
+  <Card title="Submitting Patches" icon="file-code" href="https://linuxtv.org/wiki/index.php/Development:_Submitting_Patches">
+    LinuxTV patch submission guide
+  </Card>
+  <Card title="Open Source Guide" icon="book" href="http://www.faqs.org/docs/artu/ch19s02.html">
+    Contributing to open source projects
+  </Card>
+  <Card title="Building" icon="hammer" href="./building">
+    Detailed build instructions
+  </Card>
+</CardGroup>
+
+## Communication
+
+- **Mailing List:** linux-media@vger.kernel.org
+- **Bug Tracker:** https://github.com/mchehab/zbar/issues
+- **GitHub Discussions:** For questions and help
+
+## License
+
+By contributing to ZBar, you agree that your contributions will be licensed under the same license as ZBar (LGPL 2.1). See the `COPYING` file for details.
+
+---
+
+**Thank you for contributing to ZBar Advanced!** Your contributions help improve barcode scanning for everyone.

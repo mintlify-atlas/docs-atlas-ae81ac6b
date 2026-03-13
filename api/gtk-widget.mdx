@@ -1,0 +1,484 @@
+---
+title: 'GTK+ Widget'
+description: 'ZBar barcode scanning widget for GTK+ 2.x and GTK+ 3.x applications'
+---
+
+## Overview
+
+The ZBar GTK+ widget embeds a barcode reader directly into GTK+ based GUI applications. It supports both GTK+ 2.x and GTK+ 3.x, providing seamless video scanning from cameras and image-based barcode detection.
+
+<Note>
+The widget supports both GTK2 and GTK3. As of version 0.23, GTK2 is the default. Use `--with-gtk=auto` during configuration to build with GTK3.
+</Note>
+
+## Features
+
+- **Video Scanning**: Real-time barcode detection from video devices (webcams, cameras)
+- **Image Scanning**: Scan barcodes from GdkPixbuf images
+- **Signal-based**: Asynchronous barcode detection with GTK signals
+- **Cross-platform**: Works on Linux (X11) and Windows
+- **Automatic Conversion**: Built-in image format conversion for optimal scanning
+
+## Installation
+
+### Build Requirements
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install libgtk2.0-dev pkg-config
+
+# For GTK3
+sudo apt-get install libgtk-3-dev pkg-config
+```
+
+### Compilation
+
+```bash
+# GTK2 (default)
+./configure
+make
+
+# GTK3
+./configure --with-gtk=auto
+make
+```
+
+### Header Include
+
+```c
+#include <zbar/zbargtk.h>
+```
+
+## Widget Creation
+
+### Creating the Widget
+
+```c
+#include <gtk/gtk.h>
+#include <zbar/zbargtk.h>
+
+GtkWidget *zbar_widget;
+
+// Create new ZBar GTK widget
+zbar_widget = zbar_gtk_new();
+
+// Add to your container
+gtk_container_add(GTK_CONTAINER(window), zbar_widget);
+gtk_widget_show(zbar_widget);
+```
+
+### Complete Example
+
+```c
+#include <gtk/gtk.h>
+#include <zbar/zbargtk.h>
+
+static void decoded_callback(ZBarGtk *zbar,
+                            zbar_symbol_type_t symbol_type,
+                            const char *data,
+                            gpointer user_data)
+{
+    g_print("Decoded %s: %s\n",
+            zbar_get_symbol_name(symbol_type),
+            data);
+}
+
+int main(int argc, char **argv)
+{
+    GtkWidget *window;
+    GtkWidget *zbar_widget;
+
+    gtk_init(&argc, &argv);
+
+    // Create main window
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(window), "ZBar Scanner");
+    gtk_window_set_default_size(GTK_WINDOW(window), 640, 480);
+    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    // Create ZBar widget
+    zbar_widget = zbar_gtk_new();
+    gtk_container_add(GTK_CONTAINER(window), zbar_widget);
+
+    // Connect to decoded signal
+    g_signal_connect(zbar_widget, "decoded",
+                     G_CALLBACK(decoded_callback), NULL);
+
+    // Set video device and enable scanning
+    zbar_gtk_set_video_device(ZBAR_GTK(zbar_widget), "/dev/video0");
+    zbar_gtk_set_video_enabled(ZBAR_GTK(zbar_widget), TRUE);
+
+    // Show and run
+    gtk_widget_show_all(window);
+    gtk_main();
+
+    return 0;
+}
+```
+
+## Properties
+
+The ZBarGtk widget exposes the following GObject properties:
+
+### video-device
+
+**Type**: `string` (read/write)
+
+The platform-specific name of the video device.
+
+```c
+// Get current device
+const char *device = zbar_gtk_get_video_device(ZBAR_GTK(widget));
+
+// Set new device (opens asynchronously)
+zbar_gtk_set_video_device(ZBAR_GTK(widget), "/dev/video0");
+
+// Close device
+zbar_gtk_set_video_device(ZBAR_GTK(widget), NULL);
+```
+
+<Note>
+Opening a video device is asynchronous. Use the `video-opened` property or monitor the `notify::video-opened` signal to detect when the device is ready.
+</Note>
+
+### video-enabled
+
+**Type**: `boolean` (read/write)
+
+Controls video streaming state. Use to pause/resume scanning without closing the device.
+
+```c
+// Enable video scanning
+zbar_gtk_set_video_enabled(ZBAR_GTK(widget), TRUE);
+
+// Pause scanning
+zbar_gtk_set_video_enabled(ZBAR_GTK(widget), FALSE);
+
+// Check state
+gboolean enabled = zbar_gtk_get_video_enabled(ZBAR_GTK(widget));
+```
+
+### video-opened
+
+**Type**: `boolean` (read-only)
+
+Current opened state of the video device. 
+
+```c
+// Check if device is opened
+gboolean opened = zbar_gtk_get_video_opened(ZBAR_GTK(widget));
+
+if (opened) {
+    g_print("Video device is ready\n");
+}
+```
+
+The device may close automatically if streaming errors occur.
+
+## Signals
+
+### decoded
+
+Emitted when a barcode is successfully decoded.
+
+**Callback Signature**:
+```c
+void user_callback(ZBarGtk *widget,
+                   zbar_symbol_type_t symbol_type,
+                   const char *data,
+                   gpointer user_data);
+```
+
+**Parameters**:
+- `symbol_type`: Type of barcode (e.g., `ZBAR_QRCODE`, `ZBAR_EAN13`)
+- `data`: Decoded barcode data (null-terminated string)
+
+**Example**:
+```c
+static void on_decoded(ZBarGtk *zbar,
+                       zbar_symbol_type_t type,
+                       const char *data,
+                       gpointer user_data)
+{
+    switch (type) {
+        case ZBAR_QRCODE:
+            g_print("QR Code: %s\n", data);
+            break;
+        case ZBAR_EAN13:
+            g_print("EAN-13: %s\n", data);
+            break;
+        default:
+            g_print("%s: %s\n", zbar_get_symbol_name(type), data);
+    }
+}
+
+g_signal_connect(widget, "decoded", G_CALLBACK(on_decoded), NULL);
+```
+
+### decoded-text
+
+Emitted when a barcode is decoded, with the symbol type prefixed to the data.
+
+**Callback Signature**:
+```c
+void user_callback(ZBarGtk *widget,
+                   const char *text,
+                   gpointer user_data);
+```
+
+**Parameters**:
+- `text`: Symbol type name and data, separated by colon (e.g., "QR-Code:Hello World")
+
+**Example**:
+```c
+static void on_decoded_text(ZBarGtk *zbar,
+                            const char *text,
+                            gpointer user_data)
+{
+    // text is formatted as "TYPE:DATA"
+    g_print("Scanned: %s\n", text);
+}
+
+g_signal_connect(widget, "decoded-text",
+                 G_CALLBACK(on_decoded_text), NULL);
+```
+
+## Methods
+
+### zbar_gtk_new()
+
+Creates a new ZBar GTK widget instance.
+
+```c
+GtkWidget *zbar_gtk_new(void);
+```
+
+**Returns**: New widget instance
+
+### zbar_gtk_scan_image()
+
+Scans a GdkPixbuf image for barcodes.
+
+```c
+void zbar_gtk_scan_image(ZBarGtk *zbar, GdkPixbuf *image);
+```
+
+**Parameters**:
+- `zbar`: ZBarGtk widget instance
+- `image`: GdkPixbuf containing the image to scan
+
+**Example**:
+```c
+GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file("barcode.png", NULL);
+if (pixbuf) {
+    zbar_gtk_scan_image(ZBAR_GTK(widget), pixbuf);
+    g_object_unref(pixbuf);
+}
+```
+
+The `decoded` and `decoded-text` signals will be emitted for any barcodes found.
+
+### zbar_gtk_request_video_size()
+
+Requests a specific video resolution.
+
+```c
+void zbar_gtk_request_video_size(ZBarGtk *zbar, int width, int height);
+```
+
+**Parameters**:
+- `width`: Desired width in pixels
+- `height`: Desired height in pixels
+
+<Warning>
+This must be called **before** opening the video device. Changes after the device is opened have no effect.
+</Warning>
+
+**Example**:
+```c
+// Request 1280x720 resolution
+zbar_gtk_request_video_size(ZBAR_GTK(widget), 1280, 720);
+
+// Then open device
+zbar_gtk_set_video_device(ZBAR_GTK(widget), "/dev/video0");
+```
+
+### zbar_gtk_image_from_pixbuf()
+
+Utility function to convert GdkPixbuf to zbar_image_t.
+
+```c
+gboolean zbar_gtk_image_from_pixbuf(zbar_image_t *image, GdkPixbuf *pixbuf);
+```
+
+**Parameters**:
+- `image`: Destination zbar_image_t
+- `pixbuf`: Source GdkPixbuf
+
+**Returns**: TRUE on success, FALSE if conversion failed
+
+## Video Device Support
+
+### Linux (Video4Linux)
+
+Use V4L2 device paths:
+
+```c
+zbar_gtk_set_video_device(ZBAR_GTK(widget), "/dev/video0");
+zbar_gtk_set_video_device(ZBAR_GTK(widget), "/dev/video1");
+```
+
+### Windows
+
+Use DirectShow device names:
+
+```c
+zbar_gtk_set_video_device(ZBAR_GTK(widget), "USB Camera");
+```
+
+### Device Detection
+
+To enumerate available devices, use the underlying zbar video API or system-specific tools:
+
+```bash
+# Linux
+v4l2-ctl --list-devices
+
+# Query device capabilities
+v4l2-ctl -d /dev/video0 --list-formats-ext
+```
+
+## Advanced Usage
+
+### Custom Resolution
+
+```c
+// Set resolution before opening device
+zbar_gtk_request_video_size(ZBAR_GTK(widget), 1920, 1080);
+zbar_gtk_set_video_device(ZBAR_GTK(widget), "/dev/video0");
+```
+
+### Property Notifications
+
+Monitor property changes:
+
+```c
+static void on_video_opened_notify(GObject *object,
+                                   GParamSpec *pspec,
+                                   gpointer user_data)
+{
+    gboolean opened;
+    g_object_get(object, "video-opened", &opened, NULL);
+    
+    if (opened) {
+        g_print("Video device opened successfully\n");
+    } else {
+        g_print("Video device closed\n");
+    }
+}
+
+g_signal_connect(widget, "notify::video-opened",
+                 G_CALLBACK(on_video_opened_notify), NULL);
+```
+
+### Scanning Multiple Images
+
+```c
+void scan_directory(ZBarGtk *widget, const char *directory)
+{
+    GDir *dir = g_dir_open(directory, 0, NULL);
+    const char *filename;
+    
+    while ((filename = g_dir_read_name(dir))) {
+        char *path = g_build_filename(directory, filename, NULL);
+        GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(path, NULL);
+        
+        if (pixbuf) {
+            zbar_gtk_scan_image(widget, pixbuf);
+            g_object_unref(pixbuf);
+        }
+        
+        g_free(path);
+    }
+    
+    g_dir_close(dir);
+}
+```
+
+## GObject Introspection
+
+The GTK widget supports GObject Introspection (GIR), enabling use from Python and other languages.
+
+### Python Example (PyGObject)
+
+```python
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('ZBar', '1.0')
+from gi.repository import Gtk, ZBar
+
+def on_decoded(widget, symbol_type, data):
+    print(f"Decoded: {data}")
+
+window = Gtk.Window()
+zbar_widget = ZBar.Gtk.new()
+
+zbar_widget.connect('decoded', on_decoded)
+zbar_widget.set_video_device('/dev/video0')
+zbar_widget.set_video_enabled(True)
+
+window.add(zbar_widget)
+window.show_all()
+Gtk.main()
+```
+
+## Troubleshooting
+
+### Video Device Won't Open
+
+Check permissions:
+```bash
+# Add user to video group
+sudo usermod -a -G video $USER
+
+# Check device permissions
+ls -l /dev/video0
+```
+
+### No Barcodes Detected
+
+- Ensure adequate lighting
+- Move barcode closer/farther from camera
+- Check barcode symbology is enabled (see configuration)
+- Verify image quality and focus
+
+### Widget Not Displaying
+
+For GTK3, ensure proper rendering:
+```c
+gtk_widget_set_app_paintable(widget, TRUE);
+```
+
+### Performance Issues
+
+Reduce video resolution:
+```c
+zbar_gtk_request_video_size(ZBAR_GTK(widget), 640, 480);
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Video API" icon="video" href="/api/video">
+    Low-level video capture interface
+  </Card>
+  <Card title="Image Scanner" icon="camera" href="/api/image-scanner">
+    Core scanning functionality
+  </Card>
+  <Card title="Qt Widget" icon="window" href="/api/qt-widget">
+    Qt framework widget
+  </Card>
+  <Card title="Python Bindings" icon="python" href="/bindings/python">
+    Python integration examples
+  </Card>
+</CardGroup>

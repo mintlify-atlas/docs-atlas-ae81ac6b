@@ -1,0 +1,361 @@
+---
+title: Installation
+description: Learn how to install ZBar on Linux, Windows, and macOS using package managers or building from source
+---
+
+ZBar is an open source barcode reading library that supports multiple platforms and installation methods. This guide covers installation on Linux, Windows, and macOS.
+
+## Package Manager Installation
+
+<Tabs>
+  <Tab title="Debian/Ubuntu">
+    Install ZBar and its development files:
+
+    ```bash
+    sudo apt-get update
+    sudo apt-get install libzbar0 libzbar-dev
+    ```
+
+    For GUI applications with GTK support:
+
+    ```bash
+    sudo apt-get install zbarcam-gtk
+    ```
+
+    For Qt support:
+
+    ```bash
+    sudo apt-get install zbarcam-qt
+    ```
+  </Tab>
+
+  <Tab title="Fedora/RHEL">
+    Install ZBar using dnf:
+
+    ```bash
+    sudo dnf install zbar zbar-devel
+    ```
+
+    For GUI tools:
+
+    ```bash
+    sudo dnf install zbarcam
+    ```
+  </Tab>
+
+  <Tab title="macOS">
+    Install using Homebrew:
+
+    ```bash
+    brew install zbar
+    ```
+  </Tab>
+
+  <Tab title="Windows">
+    Pre-built binaries are available for Windows from the official releases:
+
+    1. Download binaries from [https://linuxtv.org/downloads/zbar/binaries/](https://linuxtv.org/downloads/zbar/binaries/)
+    2. Choose between 32-bit or 64-bit versions
+    3. Select DirectShow or Video for Windows (VfW) configuration
+    4. Extract the archive to your preferred location
+    5. Add the `bin` directory to your system PATH
+
+    <Note>
+      Windows binaries include both runtime libraries and development headers.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Building from Source
+
+Building from source gives you access to the latest features and allows customization for your specific needs.
+
+### Prerequisites
+
+<Steps>
+  <Step title="Install Build Tools">
+    The following packages are required to build ZBar:
+
+    **Debian/Ubuntu:**
+    ```bash
+    sudo apt-get install autoconf autopoint pkg-config libtool gcc make
+    ```
+
+    **Fedora/RHEL:**
+    ```bash
+    sudo dnf install autoconf gettext-devel pkg-config libtool gcc make
+    ```
+
+    **macOS:**
+    ```bash
+    brew install autoconf automake libtool pkg-config
+    ```
+  </Step>
+
+  <Step title="Install Optional Dependencies">
+    These dependencies enable additional functionality:
+
+    <Tabs>
+      <Tab title="ImageMagick (Recommended)">
+        Required for the `zbarimg` program to read various image formats.
+
+        **Minimum version:** 6.2.6 or later
+
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install libmagickwand-dev
+
+        # Fedora/RHEL
+        sudo dnf install ImageMagick-devel
+
+        # macOS
+        brew install imagemagick
+        ```
+
+        <Note>
+          You can also use GraphicsMagick as an alternative to ImageMagick.
+        </Note>
+      </Tab>
+
+      <Tab title="Video4Linux (V4L2)">
+        Required for the `zbarcam` program on Linux. V4L2 is part of the Linux kernel.
+
+        **Recommended kernel:** 3.16 or higher
+
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install libv4l-dev
+
+        # Fedora/RHEL
+        sudo dnf install libv4l-devel
+        ```
+      </Tab>
+
+      <Tab title="GTK Widget">
+        For GTK+ GUI applications with integrated barcode scanning.
+
+        **GTK+ 2.x:**
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install libgtk2.0-dev
+
+        # Fedora/RHEL
+        sudo dnf install gtk2-devel
+        ```
+
+        **GTK+ 3.x (Recommended):**
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install libgtk-3-dev
+
+        # Fedora/RHEL
+        sudo dnf install gtk3-devel
+        ```
+      </Tab>
+
+      <Tab title="Qt Widget">
+        For Qt GUI applications with integrated barcode scanning.
+
+        **Qt5:**
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install qtbase5-dev
+
+        # Fedora/RHEL
+        sudo dnf install qt5-qtbase-devel
+        ```
+
+        **Qt4:**
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install libqt4-dev
+
+        # Fedora/RHEL
+        sudo dnf install qt-devel
+        ```
+      </Tab>
+
+      <Tab title="Python Bindings">
+        For Python 2 or Python 3 support.
+
+        ```bash
+        # Debian/Ubuntu (Python 3)
+        sudo apt-get install python3-dev
+
+        # Fedora/RHEL (Python 3)
+        sudo dnf install python3-devel
+        ```
+
+        For GObject Introspection (Python bindings for GTK widget):
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install libgirepository1.0-dev gir1.2-gtk-3.0
+
+        # Fedora/RHEL
+        sudo dnf install pygobject3-devel
+        ```
+      </Tab>
+
+      <Tab title="Java Widget">
+        For Java applications (requires JDK 7 or higher).
+
+        ```bash
+        # Debian/Ubuntu
+        sudo apt-get install default-jdk
+
+        # Fedora/RHEL
+        sudo dnf install java-devel
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+### Build Instructions
+
+<Steps>
+  <Step title="Clone or Download the Source">
+    ```bash
+    git clone https://github.com/mchehab/zbar.git
+    cd zbar
+    ```
+
+    Or download a tarball from [https://linuxtv.org/downloads/zbar/](https://linuxtv.org/downloads/zbar/)
+  </Step>
+
+  <Step title="Generate Configure Script">
+    ```bash
+    autoreconf -vfi
+    ```
+
+    This generates the `configure` script using autotools.
+  </Step>
+
+  <Step title="Configure the Build">
+    **Basic configuration:**
+    ```bash
+    ./configure
+    ```
+
+    **With GTK3 and Python3 (Recommended):**
+    ```bash
+    ./configure --with-gtk=auto --with-python=auto
+    ```
+
+    This will automatically detect and use the latest available GTK and Python versions.
+
+    **Custom installation prefix:**
+    ```bash
+    ./configure --prefix=/usr/local
+    ```
+
+    **Disable specific features:**
+    ```bash
+    ./configure --without-qt --without-gtk --without-python
+    ```
+
+    <Note>
+      Run `./configure --help` to see all available configuration options.
+    </Note>
+  </Step>
+
+  <Step title="Compile">
+    ```bash
+    make
+    ```
+
+    To speed up compilation on multi-core systems:
+    ```bash
+    make -j$(nproc)
+    ```
+  </Step>
+
+  <Step title="Install">
+    ```bash
+    sudo make install
+    ```
+
+    This installs:
+    - Libraries to `/usr/local/lib` (or custom prefix)
+    - Headers to `/usr/local/include`
+    - Binaries (`zbarimg`, `zbarcam`) to `/usr/local/bin`
+  </Step>
+
+  <Step title="Update Library Cache (Linux)">
+    After installation, update the dynamic linker cache:
+
+    ```bash
+    sudo ldconfig
+    ```
+  </Step>
+</Steps>
+
+### Build Configuration Options
+
+<Warning>
+  By default, ZBar 0.23+ uses GTK2 and Python2 for compatibility. To use GTK3 and Python3, explicitly configure with `--with-gtk=auto --with-python=auto`.
+</Warning>
+
+Common configuration flags:
+
+| Flag | Description |
+|------|-------------|
+| `--prefix=PATH` | Install to custom location (default: `/usr/local`) |
+| `--with-gtk=auto` | Auto-detect and use latest GTK version |
+| `--with-python=auto` | Auto-detect and use latest Python version |
+| `--without-imagemagick` | Disable ImageMagick support |
+| `--without-qt` | Disable Qt widget |
+| `--without-gtk` | Disable GTK widget |
+| `--without-python` | Disable Python bindings |
+| `--without-java` | Disable Java bindings |
+| `--disable-video` | Disable video support |
+
+## Verification
+
+Verify your installation by checking the version:
+
+```bash
+zbarimg --version
+```
+
+Or test with a sample barcode image:
+
+```bash
+# Scan a barcode image
+zbarimg /path/to/barcode.png
+```
+
+## Linking Against ZBar
+
+When building applications that use ZBar, link against the library:
+
+**Using pkg-config (Recommended):**
+```bash
+gcc myapp.c $(pkg-config --cflags --libs zbar) -o myapp
+```
+
+**Manual linking:**
+```bash
+gcc myapp.c -lzbar -o myapp
+```
+
+**CMake:**
+```cmake
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(ZBAR REQUIRED zbar)
+
+add_executable(myapp myapp.c)
+target_link_libraries(myapp ${ZBAR_LIBRARIES})
+target_include_directories(myapp PUBLIC ${ZBAR_INCLUDE_DIRS})
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first barcode scanning application
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,480 @@
+---
+title: Application Integration
+description: Best practices for integrating ZBar into your applications, including threading, memory management, and error handling
+---
+
+This guide covers essential topics for successfully integrating ZBar into production applications.
+
+## Thread Safety
+
+ZBar provides thread-safe interfaces when properly configured, but requires careful attention to resource ownership and locking.
+
+### Threaded vs Non-Threaded Mode
+
+The Processor API supports both modes:
+
+```c
+/* Threaded mode - video capture runs in background */
+zbar_processor_t *proc = zbar_processor_create(1);
+
+/* Non-threaded mode - blocking operation */
+zbar_processor_t *proc = zbar_processor_create(0);
+```
+
+<Tabs>
+  <Tab title="Threaded Mode">
+    **Advantages:**
+    - Non-blocking video capture
+    - Responsive UI/main thread
+    - Automatic frame processing
+    
+    **When to use:**
+    - GUI applications
+    - Real-time video scanning
+    - Applications requiring concurrent operations
+    
+    ```c ~/workspace/source/examples/processor.c
+    zbar_processor_t *proc = zbar_processor_create(1);
+    zbar_processor_set_data_handler(proc, my_handler, NULL);
+    zbar_processor_set_active(proc, 1);
+    
+    /* Main thread remains free for other work */
+    while (running) {
+        handle_ui_events();
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Non-Threaded Mode">
+    **Advantages:**
+    - Simpler synchronization
+    - Predictable execution
+    - Lower overhead
+    
+    **When to use:**
+    - Single-threaded applications
+    - Static image processing
+    - Embedded systems without threading
+    
+    ```c
+    zbar_processor_t *proc = zbar_processor_create(0);
+    
+    /* Blocking call - processes one frame */
+    zbar_process_one(proc, timeout_ms);
+    
+    /* Or process a static image */
+    zbar_process_image(proc, image);
+    ```
+  </Tab>
+</Tabs>
+
+### Internal Locking
+
+When threading is enabled, ZBar uses mutexes to protect shared state:
+
+```c ~/workspace/source/zbar/processor.c
+static inline int proc_enter(zbar_processor_t *proc)
+{
+    _zbar_mutex_lock(&proc->mutex);
+    return (_zbar_processor_lock(proc));
+}
+
+static inline int proc_leave(zbar_processor_t *proc)
+{
+    int rc = _zbar_processor_unlock(proc, 0);
+    _zbar_mutex_unlock(&proc->mutex);
+    return (rc);
+}
+```
+
+The processor maintains internal locks around:
+- Configuration changes
+- Video state transitions  
+- Result callbacks
+- Window operations
+
+### Data Handler Thread Safety
+
+Your data handler callback runs in the video thread context:
+
+```c
+static void my_handler(zbar_image_t *image, const void *userdata)
+{
+    /* This runs in the video thread! */
+    const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+    
+    for (; symbol; symbol = zbar_symbol_next(symbol)) {
+        /* Safe: read-only access to symbol data */
+        const char *data = zbar_symbol_get_data(symbol);
+        
+        /* UNSAFE: modifying shared state without locking */
+        // global_counter++;  // DON'T DO THIS
+        
+        /* SAFE: use your own synchronization */
+        pthread_mutex_lock(&my_mutex);
+        global_counter++;
+        pthread_mutex_unlock(&my_mutex);
+    }
+}
+```
+
+<Warning>
+**Thread Safety Rules:**
+
+1. **Symbol data is read-only** - Don't modify returned pointers
+2. **Symbols are temporary** - Don't store pointers without incrementing reference count
+3. **Synchronize shared state** - Use your own locks for application data
+4. **Avoid blocking** - Keep handlers fast to maintain frame rate
+</Warning>
+
+## Memory Management
+
+ZBar uses reference counting for automatic memory management.
+
+### Reference Counting
+
+Images and symbols use reference counts to track ownership:
+
+```c
+/* Image reference counting */
+zbar_image_t *img = zbar_image_create();
+// ref count = 1
+
+zbar_image_ref(img, 1);  // increment: ref count = 2
+zbar_image_ref(img, -1); // decrement: ref count = 1
+
+zbar_image_destroy(img); // equivalent to zbar_image_ref(img, -1)
+// when ref count reaches 0, memory is freed
+```
+
+### Symbol Lifetime
+
+Symbols are owned by their parent image:
+
+```c ~/workspace/source/examples/scan_image.c
+zbar_scan_image(scanner, image);
+
+/* Symbols are valid while image exists */
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+const char *data = zbar_symbol_get_data(symbol);
+
+/* Image destruction invalidates symbols */
+zbar_image_destroy(image);
+// symbol pointer is now INVALID - don't use it!
+```
+
+To keep symbols after destroying the image:
+
+```c
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+
+/* Increment reference to keep symbol alive */
+zbar_symbol_ref(symbol, 1);
+
+/* Now safe to destroy image */
+zbar_image_destroy(image);
+
+/* Symbol still valid */
+const char *data = zbar_symbol_get_data(symbol);
+
+/* Release when done */
+zbar_symbol_ref(symbol, -1);
+```
+
+### Data Cleanup Handlers
+
+Provide cleanup handlers for image data buffers:
+
+```c ~/workspace/source/examples/scan_image.c
+void *raw_data = malloc(width * height);
+
+/* Built-in handler calls free() */
+zbar_image_set_data(image, raw_data, width * height, zbar_image_free_data);
+
+/* Image destruction will call free(raw_data) */
+zbar_image_destroy(image);
+```
+
+Custom cleanup handler:
+
+```c
+void my_cleanup(zbar_image_t *img)
+{
+    void *data = (void*)zbar_image_get_data(img);
+    /* Custom cleanup logic */
+    my_free_function(data);
+}
+
+zbar_image_set_data(image, custom_data, size, my_cleanup);
+```
+
+### Resource Cleanup
+
+Always destroy ZBar objects when done:
+
+```c
+/* Scanner lifecycle */
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+// ... use scanner ...
+zbar_image_scanner_destroy(scanner);
+
+/* Processor lifecycle */
+zbar_processor_t *proc = zbar_processor_create(1);
+// ... use processor ...
+zbar_processor_destroy(proc);  // stops threads, releases video device
+
+/* Video lifecycle */
+zbar_video_t *video = zbar_video_create();
+zbar_video_open(video, device);
+zbar_video_enable(video, 1);
+// ... capture frames ...
+zbar_video_enable(video, 0);
+zbar_video_destroy(video);
+```
+
+## Error Handling
+
+### Checking Return Values
+
+Most ZBar functions return status codes:
+
+```c
+/* Scan functions return count or error */
+int n = zbar_scan_image(scanner, image);
+if (n < 0) {
+    fprintf(stderr, "Scan failed\n");
+    return -1;
+} else if (n == 0) {
+    printf("No barcodes found\n");
+} else {
+    printf("Found %d barcode(s)\n", n);
+}
+
+/* Init functions return 0 on success */
+if (zbar_processor_init(proc, device, 1) != 0) {
+    fprintf(stderr, "Failed to initialize\n");
+    return -1;
+}
+```
+
+### Error Details
+
+Retrieve detailed error information:
+
+```c ~/workspace/source/zbarcam/zbarcam.c
+if (zbar_processor_init(proc, video_device, display)) {
+    /* Print error to stderr and return exit code */
+    return (zbar_processor_error_spew(proc, 0));
+}
+
+/* Or get error information programmatically */
+zbar_error_t code = zbar_processor_get_error_code(proc);
+const char *msg = zbar_processor_error_string(proc, 0);
+fprintf(stderr, "Error %d: %s\n", code, msg);
+```
+
+### Error Codes
+
+```c ~/workspace/source/include/zbar.h
+typedef enum zbar_error_e
+{
+    ZBAR_OK = 0,          /* no error */
+    ZBAR_ERR_NOMEM,       /* out of memory */
+    ZBAR_ERR_INTERNAL,    /* internal library error */
+    ZBAR_ERR_UNSUPPORTED, /* unsupported request */
+    ZBAR_ERR_INVALID,     /* invalid request */
+    ZBAR_ERR_SYSTEM,      /* system error */
+    ZBAR_ERR_LOCKING,     /* locking error */
+    ZBAR_ERR_BUSY,        /* all resources busy */
+    ZBAR_ERR_XDISPLAY,    /* X11 display error */
+    ZBAR_ERR_XPROTO,      /* X11 protocol error */
+    ZBAR_ERR_CLOSED,      /* output window is closed */
+    ZBAR_ERR_WINAPI,      /* windows system error */
+} zbar_error_t;
+```
+
+## Best Practices
+
+### Initialize Once, Reuse
+
+```c
+/* GOOD: Create scanner once, reuse for multiple images */
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 1);
+
+for (int i = 0; i < num_images; i++) {
+    zbar_image_t *img = load_image(i);
+    zbar_scan_image(scanner, img);
+    process_results(img);
+    zbar_image_scanner_recycle_image(scanner, img);
+    zbar_image_destroy(img);
+}
+
+zbar_image_scanner_destroy(scanner);
+
+/* BAD: Creating scanner for each image */
+for (int i = 0; i < num_images; i++) {
+    zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+    // ... configure, scan, destroy each time (slow!)
+}
+```
+
+### Recycle Images for Video
+
+When processing video frames, recycle images to reuse memory:
+
+```c
+zbar_image_scanner_enable_cache(scanner, 1);
+
+while (running) {
+    zbar_image_t *img = zbar_video_next_image(video);
+    
+    zbar_scan_image(scanner, img);
+    process_results(img);
+    
+    /* Recycle before destroying to reuse memory */
+    zbar_image_scanner_recycle_image(scanner, img);
+    zbar_image_destroy(img);
+}
+```
+
+### Validate Configuration
+
+```c
+if (zbar_image_scanner_set_config(scanner, symbology, config, value) != 0) {
+    fprintf(stderr, "Invalid configuration\n");
+    return -1;
+}
+
+/* Or use parse_config with error checking */
+if (zbar_image_scanner_parse_config(scanner, config_string) != 0) {
+    fprintf(stderr, "Failed to parse config: %s\n", config_string);
+    return -1;
+}
+```
+
+### Handle Window Close Events
+
+For GUI applications, handle window close gracefully:
+
+```c ~/workspace/source/zbar/processor.c
+int _zbar_processor_handle_input(zbar_processor_t *proc, int input)
+{
+    switch (input) {
+    case -1:
+        /* User closed window */
+        _zbar_processor_set_visible(proc, 0);
+        err_capture(proc, SEV_WARNING, ZBAR_ERR_CLOSED, __func__,
+                    "user closed display window");
+        break;
+    }
+    return (input);
+}
+```
+
+### Set Appropriate Timeouts
+
+```c
+/* Wait indefinitely */
+zbar_processor_user_wait(proc, -1);
+
+/* Wait up to 5 seconds */
+int rc = zbar_process_one(proc, 5000);
+if (rc == 0) {
+    printf("Timeout - no barcode detected\n");
+} else if (rc > 0) {
+    printf("Barcode detected\n");
+}
+```
+
+## Platform-Specific Considerations
+
+### Linux (V4L2)
+
+```c
+/* Request V4L2 interface */
+zbar_processor_request_interface(proc, 2);
+
+/* Use mmap for better performance */
+zbar_processor_request_iomode(proc, 2);
+```
+
+Ensure user has access to video devices:
+```bash
+sudo usermod -a -G video $USER
+```
+
+### Windows (DirectShow)
+
+```c ~/workspace/source/zbarcam/zbarcam.c
+#ifdef DIRECTSHOW
+HRESULT res = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+if (FAILED(res)) {
+    fprintf(stderr, "ERROR: failed to initialize COM library\n");
+    return (1);
+}
+#endif
+```
+
+Windows requires COM initialization before using video capture.
+
+### Embedded Systems
+
+For resource-constrained systems:
+
+```c
+/* Disable threading to reduce overhead */
+zbar_processor_t *proc = zbar_processor_create(0);
+
+/* Reduce scan density */
+zbar_processor_parse_config(proc, "*.x-density=2");
+zbar_processor_parse_config(proc, "*.y-density=2");
+
+/* Request lower resolution */
+zbar_processor_request_size(proc, 320, 240);
+
+/* Enable only required symbologies */
+zbar_processor_parse_config(proc, "*.enable=0");
+zbar_processor_parse_config(proc, "qrcode.enable=1");
+```
+
+## Debugging
+
+### Verbosity Levels
+
+```c ~/workspace/source/include/zbar.h
+/* Set global debug level */
+zbar_set_verbosity(3);  // 0=quiet, higher=more verbose
+
+/* Or increment for each -v flag */
+zbar_increase_verbosity();
+```
+
+From command line:
+```bash
+zbarcam -vvv /dev/video0  # Maximum verbosity
+```
+
+### Dumping Images
+
+Dump images for analysis:
+
+```c ~/workspace/source/include/zbar.h
+/* Write image to file for debugging */
+zbar_image_write(image, "debug");
+// Creates debug.Y800.zimg or similar
+```
+
+### Checking Library Version
+
+```c ~/workspace/source/include/zbar.h
+unsigned major, minor, patch;
+zbar_version(&major, &minor, &patch);
+printf("ZBar version: %u.%u.%u\n", major, minor, patch);
+```
+
+## See Also
+
+- [Scanning Images](/guides/scanning-images) - Image scanning API
+- [Video Scanning](/guides/video-scanning) - Video capture and processing
+- [Configuration](/guides/configuration) - Scanner configuration options

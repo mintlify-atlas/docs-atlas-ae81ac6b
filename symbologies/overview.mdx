@@ -1,0 +1,274 @@
+---
+title: 'Symbologies Overview'
+description: 'Complete guide to supported barcode symbologies in ZBar Advanced'
+icon: 'barcode'
+---
+
+## Supported Symbologies
+
+ZBar Advanced supports a comprehensive range of 1D and 2D barcode symbologies for various industrial and commercial applications.
+
+### 1D Barcodes
+
+<CardGroup cols={2}>
+  <Card title="EAN/UPC" icon="receipt" href="/symbologies/1d-codes#ean-upc">
+    EAN-8, EAN-13, UPC-A, UPC-E, ISBN-10, ISBN-13
+  </Card>
+  <Card title="Code 128" icon="barcode" href="/symbologies/1d-codes#code-128">
+    High-density alphanumeric symbology
+  </Card>
+  <Card title="Code 39" icon="barcode" href="/symbologies/1d-codes#code-39">
+    Alphanumeric symbology with ASCII support
+  </Card>
+  <Card title="Code 93" icon="barcode" href="/symbologies/1d-codes#code-93">
+    Compact alphanumeric symbology
+  </Card>
+  <Card title="Interleaved 2 of 5" icon="barcode" href="/symbologies/1d-codes#interleaved-2-of-5">
+    Numeric-only, high-density symbology
+  </Card>
+  <Card title="Codabar" icon="barcode" href="/symbologies/1d-codes#codabar">
+    Numeric symbology with special characters
+  </Card>
+  <Card title="DataBar" icon="barcode" href="/symbologies/1d-codes#databar">
+    GS1 DataBar (RSS) and DataBar Expanded
+  </Card>
+</CardGroup>
+
+### 2D Barcodes
+
+<CardGroup cols={2}>
+  <Card title="QR Code" icon="qrcode" href="/symbologies/2d-codes#qr-code">
+    High-capacity 2D matrix symbology
+  </Card>
+  <Card title="SQ Code" icon="square" href="/symbologies/2d-codes#sq-code">
+    Secure QR Code variant
+  </Card>
+</CardGroup>
+
+## Symbol Type Enumeration
+
+ZBar Advanced uses the `zbar_symbol_type_e` enumeration to identify symbologies:
+
+```c
+typedef enum zbar_symbol_type_e {
+    ZBAR_NONE        = 0,    // No symbol decoded
+    ZBAR_PARTIAL     = 1,    // Intermediate status
+    ZBAR_EAN2        = 2,    // GS1 2-digit add-on
+    ZBAR_EAN5        = 5,    // GS1 5-digit add-on
+    ZBAR_EAN8        = 8,    // EAN-8
+    ZBAR_UPCE        = 9,    // UPC-E
+    ZBAR_ISBN10      = 10,   // ISBN-10 (from EAN-13)
+    ZBAR_UPCA        = 12,   // UPC-A
+    ZBAR_EAN13       = 13,   // EAN-13
+    ZBAR_ISBN13      = 14,   // ISBN-13 (from EAN-13)
+    ZBAR_COMPOSITE   = 15,   // EAN/UPC composite
+    ZBAR_I25         = 25,   // Interleaved 2 of 5
+    ZBAR_DATABAR     = 34,   // GS1 DataBar (RSS)
+    ZBAR_DATABAR_EXP = 35,   // GS1 DataBar Expanded
+    ZBAR_CODABAR     = 38,   // Codabar
+    ZBAR_CODE39      = 39,   // Code 39
+    ZBAR_PDF417      = 57,   // PDF417
+    ZBAR_QRCODE      = 64,   // QR Code
+    ZBAR_SQCODE      = 80,   // SQ Code
+    ZBAR_CODE93      = 93,   // Code 93
+    ZBAR_CODE128     = 128,  // Code 128
+} zbar_symbol_type_t;
+```
+
+Reference: ~/workspace/source/include/zbar.h:89
+
+## Enabling and Disabling Symbologies
+
+### Enable All Symbologies
+
+By default, all supported symbologies are enabled. To ensure all symbologies are active:
+
+```c
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+
+// Enable all symbologies (default behavior)
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 1);
+```
+
+### Enable Specific Symbology
+
+To enable only specific symbologies, first disable all, then enable desired ones:
+
+```c
+// Disable all symbologies
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 0);
+
+// Enable only QR Code
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+
+// Enable Code 128
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_ENABLE, 1);
+```
+
+### Disable Specific Symbology
+
+To disable a specific symbology while keeping others enabled:
+
+```c
+// Disable EAN-13 (keeping others enabled)
+zbar_image_scanner_set_config(scanner, ZBAR_EAN13, ZBAR_CFG_ENABLE, 0);
+```
+
+## Configuration Options
+
+### Configuration Types
+
+ZBar Advanced supports various configuration options defined in `zbar_config_e`:
+
+```c
+typedef enum zbar_config_e {
+    ZBAR_CFG_ENABLE      = 0,    // Enable symbology/feature
+    ZBAR_CFG_ADD_CHECK   = 1,    // Enable check digit when optional
+    ZBAR_CFG_EMIT_CHECK  = 2,    // Return check digit when present
+    ZBAR_CFG_ASCII       = 3,    // Enable full ASCII character set
+    ZBAR_CFG_BINARY      = 4,    // Don't convert binary data to text
+    ZBAR_CFG_MIN_LEN     = 0x20, // Minimum data length for valid decode
+    ZBAR_CFG_MAX_LEN     = 0x21, // Maximum data length for valid decode
+    ZBAR_CFG_UNCERTAINTY = 0x40, // Required video consistency frames
+    ZBAR_CFG_POSITION    = 0x80, // Enable position data collection
+    ZBAR_CFG_TEST_INVERTED = 0x81, // Test inverted if decode fails
+    ZBAR_CFG_X_DENSITY   = 0x100, // Image scanner vertical scan density
+    ZBAR_CFG_Y_DENSITY   = 0x101, // Image scanner horizontal scan density
+} zbar_config_t;
+```
+
+Reference: ~/workspace/source/include/zbar.h:174
+
+### Common Configuration Examples
+
+#### Set Minimum/Maximum Length
+
+```c
+// Require Code 39 to be at least 5 characters
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, 
+                              ZBAR_CFG_MIN_LEN, 5);
+
+// Limit Code 128 to maximum 50 characters
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, 
+                              ZBAR_CFG_MAX_LEN, 50);
+```
+
+#### Enable ASCII Support
+
+```c
+// Enable full ASCII character set for Code 39
+zbar_image_scanner_set_config(scanner, ZBAR_CODE39, 
+                              ZBAR_CFG_ASCII, 1);
+```
+
+#### Configure Check Digits
+
+```c
+// Add optional check digit for Interleaved 2 of 5
+zbar_image_scanner_set_config(scanner, ZBAR_I25, 
+                              ZBAR_CFG_ADD_CHECK, 1);
+
+// Return check digit in decoded data
+zbar_image_scanner_set_config(scanner, ZBAR_I25, 
+                              ZBAR_CFG_EMIT_CHECK, 1);
+```
+
+#### Binary Data Handling
+
+```c
+// Don't convert binary data to text for QR Code
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, 
+                              ZBAR_CFG_BINARY, 1);
+```
+
+#### Scan Density
+
+```c
+// Set horizontal scan density (0 = disable, 1 = default)
+zbar_image_scanner_set_config(scanner, 0, 
+                              ZBAR_CFG_X_DENSITY, 2);
+
+// Set vertical scan density
+zbar_image_scanner_set_config(scanner, 0, 
+                              ZBAR_CFG_Y_DENSITY, 2);
+```
+
+## Configuration String Parsing
+
+ZBar Advanced provides a convenient string-based configuration API:
+
+```c
+// Parse configuration string and apply to scanner
+zbar_image_scanner_parse_config(scanner, "qrcode.enable=1");
+zbar_image_scanner_parse_config(scanner, "code128.min-length=5");
+zbar_image_scanner_parse_config(scanner, "i25.add-check=1");
+
+// Apply to all symbologies (omit symbology name)
+zbar_image_scanner_parse_config(scanner, "enable=0"); // Disable all
+```
+
+Format: `[symbology.]config[=value]`
+
+- If symbology is omitted, applies to all symbologies (value = 0)
+- If value is omitted, defaults to 1
+
+Reference: ~/workspace/source/include/zbar.h:1301
+
+## Modifier Flags
+
+Decoded symbols may have modifier flags indicating special characteristics:
+
+```c
+typedef enum zbar_modifier_e {
+    ZBAR_MOD_GS1 = 0,  // FNC1 before first data character
+                       // Data may be parsed as GS1 AIs
+    ZBAR_MOD_AIM = 1,  // FNC1 after first character/digit pair
+    ZBAR_MOD_NUM = 2,  // Number of modifiers
+} zbar_modifier_t;
+```
+
+Retrieve modifiers from decoded symbol:
+
+```c
+const zbar_symbol_t *symbol = zbar_symbol_set_first_symbol(symbols);
+unsigned int modifiers = zbar_symbol_get_modifiers(symbol);
+
+if (modifiers & (1 << ZBAR_MOD_GS1)) {
+    // Symbol contains GS1 Application Identifier data
+}
+```
+
+Reference: ~/workspace/source/include/zbar.h:197
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Optimize for Performance">
+    - Disable symbologies you don't need to reduce processing time
+    - Use appropriate scan density settings for your image resolution
+    - Set reasonable min/max length constraints
+  </Accordion>
+  
+  <Accordion title="Improve Accuracy">
+    - Enable check digit validation when applicable
+    - Set appropriate length constraints to filter false positives
+    - Use ZBAR_CFG_UNCERTAINTY for video streams to require consistency
+  </Accordion>
+  
+  <Accordion title="Handle Special Data">
+    - Enable ZBAR_CFG_BINARY for QR codes containing raw binary data
+    - Enable ZBAR_CFG_ASCII for Code 39 with full ASCII character set
+    - Check modifier flags for GS1 formatted data
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="1D Barcodes" icon="barcode" href="/symbologies/1d-codes">
+    Detailed specifications for 1D symbologies
+  </Card>
+  <Card title="2D Barcodes" icon="qrcode" href="/symbologies/2d-codes">
+    Detailed specifications for 2D symbologies
+  </Card>
+</CardGroup>

@@ -1,0 +1,497 @@
+---
+title: "Decoder"
+description: "Low-level bar width stream decoder for extracting barcode data"
+---
+
+## Overview
+
+The Decoder is a low-level interface that identifies symbols and extracts encoded data from streams of bar and space widths. It processes width measurements to decode barcode symbologies.
+
+## Key Features
+
+- Streaming width-based decoding
+- Symbology-specific configuration
+- State management for partial symbols
+- Direction detection
+- Modifier flags (GS1, AIM)
+
+## Object Management
+
+### zbar_decoder_create
+
+Create a new decoder instance.
+
+```c
+zbar_decoder_t *zbar_decoder_create(void);
+```
+
+<ResponseField name="return" type="zbar_decoder_t*">
+  Pointer to the new decoder object
+</ResponseField>
+
+**Example:**
+```c
+zbar_decoder_t *decoder = zbar_decoder_create();
+```
+
+### zbar_decoder_destroy
+
+Destroy a decoder and free all associated resources.
+
+```c
+void zbar_decoder_destroy(zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder to destroy
+</ParamField>
+
+## Configuration
+
+### zbar_decoder_set_config
+
+Set configuration for specified symbology.
+
+```c
+int zbar_decoder_set_config(zbar_decoder_t *decoder,
+                            zbar_symbol_type_t symbology,
+                            zbar_config_t config,
+                            int value);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ParamField path="symbology" type="zbar_symbol_type_t" required>
+  The barcode symbology to configure (or 0 for all)
+</ParamField>
+
+<ParamField path="config" type="zbar_config_t" required>
+  The configuration parameter to set
+</ParamField>
+
+<ParamField path="value" type="int" required>
+  The value to set
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 for success, non-0 for failure
+</ResponseField>
+
+**Common configurations:**
+
+- `ZBAR_CFG_ENABLE` - Enable/disable symbology (1/0)
+- `ZBAR_CFG_ADD_CHECK` - Enable check digit when optional
+- `ZBAR_CFG_EMIT_CHECK` - Return check digit when present
+- `ZBAR_CFG_ASCII` - Enable full ASCII character set
+- `ZBAR_CFG_BINARY` - Don't convert binary data to text
+- `ZBAR_CFG_MIN_LEN` - Minimum data length for valid decode
+- `ZBAR_CFG_MAX_LEN` - Maximum data length for valid decode
+
+**Example:**
+```c
+// Enable Code 128
+zbar_decoder_set_config(decoder, ZBAR_CODE128, ZBAR_CFG_ENABLE, 1);
+
+// Set minimum length
+zbar_decoder_set_config(decoder, ZBAR_CODE128, ZBAR_CFG_MIN_LEN, 6);
+
+// Emit check digits
+zbar_decoder_set_config(decoder, ZBAR_CODE128, ZBAR_CFG_EMIT_CHECK, 1);
+```
+
+### zbar_decoder_get_config
+
+Retrieve configuration for specified symbology.
+
+```c
+int zbar_decoder_get_config(zbar_decoder_t *decoder,
+                            zbar_symbol_type_t symbology,
+                            zbar_config_t config,
+                            int *value);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ParamField path="symbology" type="zbar_symbol_type_t" required>
+  The barcode symbology to query
+</ParamField>
+
+<ParamField path="config" type="zbar_config_t" required>
+  The configuration parameter to retrieve
+</ParamField>
+
+<ParamField path="value" type="int*" required>
+  Pointer to store the retrieved value
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 for success, non-0 for failure. On success, *value is filled.
+</ResponseField>
+
+### zbar_decoder_parse_config
+
+Parse and apply configuration from a string.
+
+```c
+int zbar_decoder_parse_config(zbar_decoder_t *decoder,
+                              const char *config_string);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ParamField path="config_string" type="const char*" required>
+  Configuration string in format "[symbology.]config[=value]"
+</ParamField>
+
+<ResponseField name="return" type="int">
+  Returns 0 for success, non-0 for failure
+</ResponseField>
+
+**Example:**
+```c
+zbar_decoder_parse_config(decoder, "code128.enable=1");
+zbar_decoder_parse_config(decoder, "code128.min-length=6");
+```
+
+### zbar_decoder_get_configs
+
+Retrieve symbology boolean config settings.
+
+```c
+unsigned int zbar_decoder_get_configs(const zbar_decoder_t *decoder,
+                                      zbar_symbol_type_t symbology);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ParamField path="symbology" type="zbar_symbol_type_t" required>
+  The barcode symbology to query
+</ParamField>
+
+<ResponseField name="return" type="unsigned int">
+  A bitmask indicating which boolean configs are currently set
+</ResponseField>
+
+## State Management
+
+### zbar_decoder_reset
+
+Clear all decoder state.
+
+```c
+void zbar_decoder_reset(zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+Flushes any partial symbols and clears all state.
+
+### zbar_decoder_new_scan
+
+Mark the start of a new scan pass.
+
+```c
+void zbar_decoder_new_scan(zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+Clears any intra-symbol state and resets color to `ZBAR_SPACE`. Partially decoded symbol state is retained.
+
+## Decoding
+
+### zbar_decode_width
+
+Process next bar/space width from the input stream.
+
+```c
+zbar_symbol_type_t zbar_decode_width(zbar_decoder_t *decoder,
+                                     unsigned width);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ParamField path="width" type="unsigned" required>
+  Width in arbitrary relative units (alternating bar/space)
+</ParamField>
+
+<ResponseField name="return" type="zbar_symbol_type_t">
+  - Symbol type if decode completes (data available)
+  - `ZBAR_PARTIAL` if part of a symbol was decoded
+  - `ZBAR_NONE` (0) if no new symbol data available
+</ResponseField>
+
+The first value of a scan should be a `ZBAR_SPACE` width, alternating from there (space, bar, space, bar, ...).
+
+**Example:**
+```c
+zbar_decoder_t *decoder = zbar_decoder_create();
+zbar_decoder_set_config(decoder, 0, ZBAR_CFG_ENABLE, 1);
+
+// Start new scan
+zbar_decoder_new_scan(decoder);
+
+// Process width stream
+unsigned widths[] = {10, 5, 10, 5, 15, 5, 10, ...};
+for (int i = 0; i < num_widths; i++) {
+    zbar_symbol_type_t sym = zbar_decode_width(decoder, widths[i]);
+    
+    if (sym == ZBAR_PARTIAL) {
+        printf("Partial symbol detected\n");
+    } else if (sym != ZBAR_NONE) {
+        printf("Decoded %s: %s\n",
+               zbar_get_symbol_name(sym),
+               zbar_decoder_get_data(decoder));
+    }
+}
+
+zbar_decoder_destroy(decoder);
+```
+
+### zbar_decoder_get_color
+
+Retrieve color of the next element to be passed to `zbar_decode_width()`.
+
+```c
+zbar_color_t zbar_decoder_get_color(const zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ResponseField name="return" type="zbar_color_t">
+  `ZBAR_SPACE` or `ZBAR_BAR`
+</ResponseField>
+
+Useful for ensuring the width stream alternates correctly between bars and spaces.
+
+## Result Retrieval
+
+### zbar_decoder_get_data
+
+Retrieve last decoded data.
+
+```c
+const char *zbar_decoder_get_data(const zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ResponseField name="return" type="const char*">
+  The data string, or NULL if no new data available
+</ResponseField>
+
+<Warning>
+The returned buffer is owned by the library. Contents are only valid between a non-zero return from `zbar_decode_width()` and the next library call.
+</Warning>
+
+### zbar_decoder_get_data_length
+
+Retrieve length of binary data.
+
+```c
+unsigned int zbar_decoder_get_data_length(const zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ResponseField name="return" type="unsigned int">
+  The length of the decoded data, or 0 if no new data available
+</ResponseField>
+
+### zbar_decoder_get_type
+
+Retrieve last decoded symbol type.
+
+```c
+zbar_symbol_type_t zbar_decoder_get_type(const zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ResponseField name="return" type="zbar_symbol_type_t">
+  The symbol type, or `ZBAR_NONE` if no new data available
+</ResponseField>
+
+### zbar_decoder_get_modifiers
+
+Retrieve modifier flags for the last decoded symbol.
+
+```c
+unsigned int zbar_decoder_get_modifiers(const zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ResponseField name="return" type="unsigned int">
+  A bitmask indicating which characteristics were detected during decoding
+</ResponseField>
+
+**Modifier flags:**
+
+- `ZBAR_MOD_GS1` - Barcode tagged as GS1 (EAN.UCC) reserved
+- `ZBAR_MOD_AIM` - Barcode tagged as AIM reserved
+
+### zbar_decoder_get_direction
+
+Retrieve last decode direction.
+
+```c
+int zbar_decoder_get_direction(const zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ResponseField name="return" type="int">
+  - 1 for forward decode
+  - -1 for reverse decode
+  - 0 if unknown or does not apply
+</ResponseField>
+
+## Callbacks
+
+### zbar_decoder_set_handler
+
+Setup data handler callback.
+
+```c
+zbar_decoder_handler_t *zbar_decoder_set_handler(
+    zbar_decoder_t *decoder,
+    zbar_decoder_handler_t *handler);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ParamField path="handler" type="zbar_decoder_handler_t*" required>
+  Callback function (or NULL to disable)
+</ParamField>
+
+<ResponseField name="return" type="zbar_decoder_handler_t*">
+  The previously registered handler
+</ResponseField>
+
+The callback is invoked just before `zbar_decode_width()` returns a non-zero value.
+
+Callback function signature:
+```c
+typedef void(zbar_decoder_handler_t)(zbar_decoder_t *decoder);
+```
+
+**Example:**
+```c
+void my_decoder_handler(zbar_decoder_t *decoder) {
+    zbar_symbol_type_t type = zbar_decoder_get_type(decoder);
+    const char *data = zbar_decoder_get_data(decoder);
+    int direction = zbar_decoder_get_direction(decoder);
+    
+    printf("Decoded %s (%s): %s\n",
+           zbar_get_symbol_name(type),
+           direction > 0 ? "forward" : "reverse",
+           data);
+}
+
+zbar_decoder_set_handler(decoder, my_decoder_handler);
+```
+
+## User Data
+
+### zbar_decoder_set_userdata
+
+Associate user data with the decoder.
+
+```c
+void zbar_decoder_set_userdata(zbar_decoder_t *decoder,
+                               void *userdata);
+```
+
+<ParamField path="decoder" type="zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ParamField path="userdata" type="void*">
+  Arbitrary user data pointer
+</ParamField>
+
+### zbar_decoder_get_userdata
+
+Retrieve user data associated with the decoder.
+
+```c
+void *zbar_decoder_get_userdata(const zbar_decoder_t *decoder);
+```
+
+<ParamField path="decoder" type="const zbar_decoder_t*" required>
+  The decoder instance
+</ParamField>
+
+<ResponseField name="return" type="void*">
+  The user data pointer
+</ResponseField>
+
+## Symbology Types
+
+Supported barcode symbologies:
+
+| Symbology | Enum Value | Description |
+|-----------|------------|-------------|
+| EAN-8 | `ZBAR_EAN8` | EAN-8 |
+| UPC-E | `ZBAR_UPCE` | UPC-E |
+| ISBN-10 | `ZBAR_ISBN10` | ISBN-10 (from EAN-13) |
+| UPC-A | `ZBAR_UPCA` | UPC-A |
+| EAN-13 | `ZBAR_EAN13` | EAN-13 |
+| ISBN-13 | `ZBAR_ISBN13` | ISBN-13 (from EAN-13) |
+| Interleaved 2 of 5 | `ZBAR_I25` | Interleaved 2 of 5 |
+| DataBar | `ZBAR_DATABAR` | GS1 DataBar (RSS) |
+| DataBar Expanded | `ZBAR_DATABAR_EXP` | GS1 DataBar Expanded |
+| Codabar | `ZBAR_CODABAR` | Codabar |
+| Code 39 | `ZBAR_CODE39` | Code 39 |
+| PDF417 | `ZBAR_PDF417` | PDF417 |
+| QR Code | `ZBAR_QRCODE` | QR Code |
+| SQ Code | `ZBAR_SQCODE` | SQ Code |
+| Code 93 | `ZBAR_CODE93` | Code 93 |
+| Code 128 | `ZBAR_CODE128` | Code 128 |
+
+## Configuration Options
+
+| Config | Enum Value | Description |
+|--------|------------|-------------|
+| Enable | `ZBAR_CFG_ENABLE` | Enable symbology/feature |
+| Add Check | `ZBAR_CFG_ADD_CHECK` | Enable check digit when optional |
+| Emit Check | `ZBAR_CFG_EMIT_CHECK` | Return check digit when present |
+| ASCII | `ZBAR_CFG_ASCII` | Enable full ASCII character set |
+| Binary | `ZBAR_CFG_BINARY` | Don't convert binary data to text |
+| Min Length | `ZBAR_CFG_MIN_LEN` | Minimum data length for valid decode |
+| Max Length | `ZBAR_CFG_MAX_LEN` | Maximum data length for valid decode |
+
+## See Also
+
+- [ImageScanner](/api/image-scanner) - Mid-level scanning interface
+- [Symbols](/api/symbols) - Working with decoded results
+- [Overview](/api/overview) - API architecture and patterns

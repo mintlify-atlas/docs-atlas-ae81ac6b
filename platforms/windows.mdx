@@ -1,0 +1,376 @@
+---
+title: Windows
+description: Build and use ZBar Advanced on Windows systems
+---
+
+ZBar Advanced supports Windows through both MinGW and Cygwin build environments, with pre-compiled binaries available for quick deployment.
+
+## System Requirements
+
+- Windows Vista or later (Windows 7, 8, 10, 11)
+- Video capture via **Video for Windows (VfW)** or **DirectShow**
+- 32-bit and 64-bit architectures supported
+
+## Pre-compiled Binaries
+
+The easiest way to use ZBar on Windows is with pre-built binaries:
+
+### Download Options
+
+Pre-compiled binaries are available from the official repository:
+
+```
+https://linuxtv.org/downloads/zbar/binaries/
+```
+
+Available configurations:
+- **32-bit / 64-bit** builds
+- **VfW** (Video for Windows) driver
+- **DirectShow** driver
+
+### Binary Distribution Contents
+
+The Windows distribution includes:
+- `zbarimg.exe` - Image file scanner
+- `zbarcam.exe` - Video scanner (command-line)
+- `zbar.dll` - Core library
+- Supporting libraries:
+  - `libiconv` - Character set conversion
+  - `libxml2` - XML parsing
+  - `ImageMagick` libraries (if included)
+  - JPEG, PNG, TIFF libraries
+
+### Running Pre-built Binaries
+
+1. **Extract the archive** to a directory (e.g., `C:\zbar`)
+2. **Open Command Prompt** from the Start menu
+3. **Navigate to the ZBar directory**:
+   ```cmd
+   cd C:\zbar\bin
+   ```
+4. **Run the tools**:
+   ```cmd
+   # Start webcam scanner
+   zbarcam.exe
+   
+   # Scan an image file
+   zbarimg.exe image.png
+   ```
+
+<Tip>
+For easier access, add the ZBar `bin` directory to your system PATH.
+</Tip>
+
+## Video Capture Drivers
+
+Windows supports two video capture APIs:
+
+### Video for Windows (VfW)
+
+**Video for Windows** is the legacy video capture API, widely supported but with limited features.
+
+**Advantages:**
+- Broad camera compatibility
+- Simpler driver requirements
+- Lower overhead
+
+**Disadvantages:**
+- Limited to older cameras
+- Fewer configuration options
+- May not support modern USB cameras
+
+**Building with VfW:**
+```bash
+./configure --host=i686-w64-mingw32 \
+  --without-directshow
+```
+
+### DirectShow
+
+**DirectShow** is the modern Windows video capture API with better support for contemporary hardware.
+
+**Advantages:**
+- Modern camera support
+- Better video format handling
+- More control over capture settings
+- Recommended for USB cameras
+
+**Disadvantages:**
+- More complex driver model
+- Slightly higher overhead
+
+**Building with DirectShow:**
+```bash
+./configure --host=i686-w64-mingw32 \
+  --with-directshow
+```
+
+<Note>
+Since ZBar version 0.23.90, **DirectShow is the recommended driver** for Windows builds. It provides better compatibility with modern webcams.
+</Note>
+
+## Building from Source
+
+### Option 1: Cross-compile from Linux
+
+The recommended approach is to cross-compile from Ubuntu using MinGW:
+
+#### Install MinGW Toolchain
+
+```bash
+sudo apt-get install -y \
+  autoconf automake autotools-dev \
+  pkg-config binutils-mingw-w64-i686 \
+  gcc-mingw-w64 mingw-w64-i686-dev \
+  mingw-w64-common win-iconv-mingw-w64-dev \
+  xmlto autopoint libdbus-1-dev
+```
+
+#### Configure for Windows (32-bit with DirectShow)
+
+```bash
+export PKG_CONFIG_PATH=/usr/i686-w64-mingw32/lib/pkgconfig
+
+autoreconf -vfi
+
+CC=i686-w64-mingw32-gcc ./configure \
+  --host=i686-w64-mingw32 \
+  --prefix=/usr/local/win32 \
+  --with-directshow \
+  --without-gtk \
+  --without-python \
+  --without-qt \
+  --without-java \
+  --without-imagemagick \
+  --enable-pthread
+
+make
+```
+
+#### Configure for Windows (64-bit with DirectShow)
+
+```bash
+export PKG_CONFIG_PATH=/usr/x86_64-w64-mingw32/lib/pkgconfig
+
+autoreconf -vfi
+
+CC=x86_64-w64-mingw32-gcc ./configure \
+  --host=x86_64-w64-mingw32 \
+  --prefix=/usr/local/win64 \
+  --with-directshow \
+  --without-gtk \
+  --without-python \
+  --without-qt \
+  --without-java \
+  --without-imagemagick \
+  --enable-pthread
+
+make
+```
+
+### Option 2: Build Natively with MinGW
+
+You can build directly on Windows using MSYS2/MinGW:
+
+#### Install MSYS2
+
+1. Download MSYS2 from https://www.msys2.org/
+2. Install to `C:\msys64` (default)
+3. Open MSYS2 MinGW terminal
+
+#### Install Build Dependencies
+
+```bash
+pacman -Syu --noconfirm
+pacman -S --noconfirm \
+  autoconf libtool automake make \
+  autoconf-archive pkg-config \
+  autopoint gettext-devel \
+  mingw-w64-i686-gcc
+```
+
+#### Build ZBar
+
+```bash
+autoreconf -vfi
+
+./configure \
+  --host=i686-w64-mingw32 \
+  --prefix=/usr/local/win32 \
+  --with-directshow \
+  --without-gtk \
+  --without-python \
+  --without-qt \
+  --without-java \
+  --without-imagemagick \
+  --enable-pthread \
+  --disable-dependency-tracking
+
+make
+```
+
+### Option 3: Build with Cygwin
+
+Cygwin provides a POSIX-like environment on Windows:
+
+1. Install Cygwin from https://cygwin.com/
+2. During setup, select these packages:
+   - `gcc-core`, `gcc-g++`
+   - `make`, `autoconf`, `automake`, `libtool`
+   - `pkg-config`
+3. Open Cygwin terminal and build:
+
+```bash
+autoreconf -vfi
+./configure --enable-pthread
+make
+make install
+```
+
+<Warning>
+Cygwin builds require `cygwin1.dll` to run. MinGW builds produce native Windows executables without external dependencies.
+</Warning>
+
+## Build Configuration Options
+
+### Video Driver Selection
+
+```bash
+# Use DirectShow (recommended)
+./configure --with-directshow
+
+# Use Video for Windows (legacy)
+./configure --without-directshow
+```
+
+### Threading Support
+
+```bash
+# Enable pthreads (requires pthread-win32)
+./configure --enable-pthread
+
+# Disable threading
+./configure --disable-pthread
+```
+
+### Disable Components
+
+For minimal Windows builds, disable unused components:
+
+```bash
+./configure \
+  --without-gtk \
+  --without-python \
+  --without-qt \
+  --without-java \
+  --without-imagemagick \
+  --without-dbus
+```
+
+## Using ZBar in Applications
+
+### Command Line Tools
+
+The Windows distribution includes command-line programs:
+
+```cmd
+REM Start webcam scanner
+zbarcam.exe
+
+REM Scan image with specific symbology
+zbarimg.exe --set qrcode.enable=1 image.png
+
+REM Show help
+zbarcam.exe --help
+zbarimg.exe --help
+```
+
+### Integrating the DLL
+
+To use `zbar.dll` in your application:
+
+1. **Include headers** from `include/zbar.h`
+2. **Link against** `libzbar.dll.a` (import library)
+3. **Distribute** `zbar.dll` with your application
+
+```c
+#include <zbar.h>
+
+// Link with -lzbar
+```
+
+### Visual Studio Integration
+
+To use ZBar in Visual Studio projects:
+
+1. Add include directory: `Project Properties → C/C++ → Additional Include Directories`
+2. Add library directory: `Project Properties → Linker → Additional Library Directories`
+3. Add library: `Project Properties → Linker → Input → Additional Dependencies` → `zbar.lib`
+4. Copy `zbar.dll` to your output directory
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Camera not detected">
+    - Ensure camera drivers are installed
+    - Try DirectShow build instead of VfW
+    - Check if camera works in other applications
+    - Verify camera is not in use by another program
+  </Accordion>
+
+  <Accordion title="Missing DLL errors">
+    Common missing DLLs:
+    - `zbar.dll` - Copy from build output
+    - `libiconv-2.dll` - Character encoding library
+    - `libxml2.dll` - XML library
+    - `pthread.dll` - If threading enabled
+    
+    Ensure all DLLs are in the same directory as the executable or in system PATH.
+  </Accordion>
+
+  <Accordion title="Build errors with MinGW">
+    - Verify MinGW toolchain is installed correctly
+    - Check `PKG_CONFIG_PATH` is set properly
+    - Use `--disable-dependency-tracking` flag
+    - Ensure host triplet matches compiler (i686 or x86_64)
+  </Accordion>
+
+  <Accordion title="zbarcam shows black screen">
+    - Camera may be in wrong format
+    - Try different camera device (zbarcam 1, zbarcam 2)
+    - Use DirectShow build for better format support
+    - Check camera resolution settings
+  </Accordion>
+</AccordionGroup>
+
+## License Information
+
+The Windows binaries include several supporting libraries, each with its own license:
+
+- **ZBar**: LGPL 2.1
+- **libiconv**: LGPL (GNU Free Software Foundation)
+- **ImageMagick**: Apache 2.0-derived license
+- **libxml2**: MIT License
+- **libjpeg/libjpeg-turbo**: BSD-style licenses
+- **libpng**: BSD-style license
+- **zlib**: BSD-style license
+- **bzip2**: BSD-style license
+
+See the `README-windows.md` and `COPYING` files in the source distribution for complete license details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Start scanning barcodes
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Integrate into your application
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Customize scanner behavior
+  </Card>
+  <Card title="Examples" icon="book" href="/quickstart">
+    See code examples
+  </Card>
+</CardGroup>

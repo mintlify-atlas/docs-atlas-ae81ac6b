@@ -1,0 +1,581 @@
+---
+title: '2D Barcode Symbologies'
+description: 'Complete guide to 2D matrix barcode symbologies in ZBar Advanced'
+icon: 'qrcode'
+---
+
+## Overview
+
+ZBar Advanced supports high-capacity 2D matrix symbologies that can encode significantly more data than traditional 1D barcodes. These symbologies support error correction, omnidirectional scanning, and can store various data types including text, URLs, binary data, and structured information.
+
+## QR Code
+
+### Format Specification
+
+**Type:** 2D matrix symbology
+
+**Standard:** ISO/IEC 18004:2015
+
+**Decoder:** ~/workspace/source/zbar/decoder/qr_finder.c
+
+**Symbol Type:** `ZBAR_QRCODE` (value: 64)
+
+**Structure:**
+- Finder patterns (3 corner squares)
+- Alignment patterns
+- Timing patterns
+- Format information
+- Version information
+- Data and error correction codewords
+- Quiet zone (mandatory white border)
+
+### Capacity
+
+<CardGroup cols={2}>
+  <Card title="Numeric Data" icon="hashtag">
+    Up to **7,089 characters**
+  </Card>
+  <Card title="Alphanumeric Data" icon="keyboard">
+    Up to **4,296 characters**
+  </Card>
+  <Card title="Binary Data" icon="binary">
+    Up to **2,953 bytes**
+  </Card>
+  <Card title="Kanji/Kana" icon="language">
+    Up to **1,817 characters**
+  </Card>
+</CardGroup>
+
+### Version and Size
+
+- **Versions:** 1 through 40
+- **Version 1:** 21×21 modules
+- **Version 40:** 177×177 modules
+- **Module increment:** 4 modules per version
+- **Formula:** Size = (Version × 4) + 17
+
+### Error Correction Levels
+
+QR Codes support four levels of Reed-Solomon error correction:
+
+| Level | Recovery Capacity | Use Case |
+|-------|------------------|----------|
+| **L (Low)** | ~7% | Clean environments, large codes |
+| **M (Medium)** | ~15% | Standard applications (default) |
+| **Q (Quartile)** | ~25% | Industrial, outdoor use |
+| **H (High)** | ~30% | Harsh environments, small codes |
+
+<Note>
+Higher error correction reduces data capacity but improves reliability.
+</Note>
+
+### Encoding Modes
+
+QR Codes automatically select optimal encoding based on content:
+
+1. **Numeric:** 0-9 only (most efficient for numbers)
+2. **Alphanumeric:** 0-9, A-Z, space, $%*+-./:  
+3. **Byte:** ISO 8859-1 or UTF-8
+4. **Kanji:** Japanese Kanji characters (Shift JIS)
+5. **ECI:** Extended Channel Interpretation (character set indicator)
+
+### Use Cases
+
+<AccordionGroup>
+  <Accordion title="Mobile Marketing">
+    - Website URLs and landing pages
+    - App download links
+    - Social media profiles
+    - Contact information (vCard)
+    - WiFi network credentials
+    - Product information and promotions
+  </Accordion>
+  
+  <Accordion title="Payment and Finance">
+    - Mobile payment (WeChat Pay, Alipay)
+    - Cryptocurrency wallets
+    - Payment requests
+    - Invoice references
+    - Banking transactions
+  </Accordion>
+  
+  <Accordion title="Supply Chain">
+    - Product tracking and tracing
+    - Asset management
+    - Inventory control
+    - Shipping labels
+    - Manufacturing process control
+  </Accordion>
+  
+  <Accordion title="Authentication">
+    - Two-factor authentication (2FA/TOTP)
+    - Ticket validation
+    - Access control
+    - Digital certificates
+    - Product authentication (anti-counterfeiting)
+  </Accordion>
+  
+  <Accordion title="Healthcare">
+    - Patient identification
+    - Medication tracking
+    - Laboratory specimens
+    - Medical records access
+    - Prescription verification
+  </Accordion>
+  
+  <Accordion title="Public Information">
+    - Museum exhibits and artwork
+    - Tourism and navigation
+    - Public transportation
+    - Event information
+    - Educational materials
+  </Accordion>
+</AccordionGroup>
+
+### Configuration Example
+
+#### Basic Configuration
+
+```c
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+
+// Enable QR Code scanning
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+```
+
+#### Binary Data Handling
+
+```c
+// Don't convert binary data to text string
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_BINARY, 1);
+
+// Decode image
+int n = zbar_scan_image(scanner, image);
+
+// Retrieve binary data
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+const char *data = zbar_symbol_get_data(symbol);
+unsigned int length = zbar_symbol_get_data_length(symbol);
+
+// Process raw binary data (may contain null bytes)
+process_binary_data(data, length);
+```
+
+#### Position Data
+
+```c
+// Enable position data collection
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_POSITION, 1);
+
+// Retrieve corner positions
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+unsigned int loc_size = zbar_symbol_get_loc_size(symbol);
+
+for (unsigned int i = 0; i < loc_size; i++) {
+    int x = zbar_symbol_get_loc_x(symbol, i);
+    int y = zbar_symbol_get_loc_y(symbol, i);
+    printf("Corner %u: (%d, %d)\n", i, x, y);
+}
+```
+
+#### Orientation Detection
+
+```c
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+zbar_orientation_t orientation = zbar_symbol_get_orientation(symbol);
+
+switch (orientation) {
+    case ZBAR_ORIENT_UP:
+        printf("Upright, read left to right\n");
+        break;
+    case ZBAR_ORIENT_RIGHT:
+        printf("Sideways, read top to bottom\n");
+        break;
+    case ZBAR_ORIENT_DOWN:
+        printf("Upside-down, read right to left\n");
+        break;
+    case ZBAR_ORIENT_LEFT:
+        printf("Sideways, read bottom to top\n");
+        break;
+    case ZBAR_ORIENT_UNKNOWN:
+        printf("Orientation unknown\n");
+        break;
+}
+```
+
+### Advanced Features
+
+#### Structured Append
+
+QR Codes support splitting large data across multiple symbols:
+
+- Up to 16 symbols in a sequence
+- Each symbol contains position indicator
+- Symbols can be scanned in any order
+- ZBar automatically reassembles the data
+
+#### FNC1 Mode (GS1)
+
+```c
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+unsigned int modifiers = zbar_symbol_get_modifiers(symbol);
+
+if (modifiers & (1 << ZBAR_MOD_GS1)) {
+    // QR Code contains GS1 Application Identifier data
+    // First character is FNC1 indicator
+    const char *data = zbar_symbol_get_data(symbol);
+    // Parse GS1 AIs: (01)12345678901234(21)SERIAL123
+}
+```
+
+#### ECI (Extended Channel Interpretation)
+
+Supports multiple character sets:
+- UTF-8 (default)
+- ISO 8859-1 (Latin-1)
+- Shift JIS (Japanese)
+- And many others via ECI indicators
+
+### Scanning Performance Tips
+
+<AccordionGroup>
+  <Accordion title="Image Quality">
+    - Minimum resolution: 3-4 pixels per module
+    - Recommended: 5-6 pixels per module for reliability
+    - Ensure adequate lighting and contrast
+    - Maintain sharp focus
+    - Avoid motion blur
+  </Accordion>
+  
+  <Accordion title="Quiet Zone">
+    - Required: Minimum 4 modules white border
+    - Critical for reliable detection
+    - Most common scanning failure cause
+    - Ensure surrounding area is clear
+  </Accordion>
+  
+  <Accordion title="Perspective and Distortion">
+    - ZBar handles perspective correction
+    - Optimal: Square-on view (perpendicular)
+    - Maximum angle: ~45 degrees from perpendicular
+    - Avoid severe warping or curvature
+  </Accordion>
+  
+  <Accordion title="Scan Density">
+    - Adjust for expected QR Code size
+    - Higher density = better small code detection
+    - Lower density = faster processing
+    
+    ```c
+    // Increase scan density for small QR codes
+    zbar_image_scanner_set_config(scanner, 0, 
+                                  ZBAR_CFG_X_DENSITY, 2);
+    zbar_image_scanner_set_config(scanner, 0, 
+                                  ZBAR_CFG_Y_DENSITY, 2);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Common Data Formats
+
+#### URL
+```
+https://example.com/page?param=value
+```
+
+#### vCard (Contact)
+```
+BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+TEL:+1-555-1234
+EMAIL:john@example.com
+END:VCARD
+```
+
+#### WiFi Network
+```
+WIFI:T:WPA;S:NetworkName;P:password;;
+```
+
+#### Email
+```
+MAILTO:recipient@example.com?subject=Hello&body=Message
+```
+
+#### SMS
+```
+SMSTO:+15551234:Message text
+```
+
+#### GS1 Digital Link
+```
+https://example.com/01/12345678901234/21/SERIAL123
+```
+
+Reference: ~/workspace/source/include/zbar.h:108, ~/workspace/source/zbar/decoder/qr_finder.c:1
+
+## SQ Code
+
+### Format Specification
+
+**Type:** 2D matrix symbology (QR Code variant)
+
+**Symbol Type:** `ZBAR_SQCODE` (value: 80)
+
+**Decoder:** ~/workspace/source/zbar/decoder/sq_finder.c
+
+**Introduction:** ZBar version 0.20.1
+
+### Overview
+
+SQ Code (Secure QR Code) is a specialized variant of QR Code designed for enhanced security and authentication applications. It maintains backward compatibility with QR Code readers while adding security features.
+
+### Key Differences from QR Code
+
+<CardGroup cols={2}>
+  <Card title="Security Features" icon="shield">
+    Enhanced security mechanisms for authentication and anti-counterfeiting
+  </Card>
+  <Card title="Backward Compatible" icon="arrow-right-arrow-left">
+    Can be read by standard QR Code readers
+  </Card>
+  <Card title="Specialized Use" icon="certificate">
+    Designed for authentication and verification
+  </Card>
+  <Card title="Additional Metadata" icon="database">
+    Supports embedded authentication data
+  </Card>
+</CardGroup>
+
+### Use Cases
+
+<AccordionGroup>
+  <Accordion title="Product Authentication">
+    - Anti-counterfeiting for luxury goods
+    - Pharmaceutical verification
+    - Brand protection
+    - Serial number validation
+    - Supply chain authentication
+  </Accordion>
+  
+  <Accordion title="Document Security">
+    - Official document verification
+    - Certificate validation
+    - Secure identification cards
+    - License authentication
+    - Tamper-evident seals
+  </Accordion>
+  
+  <Accordion title="Access Control">
+    - Secure facility access
+    - Event ticketing with validation
+    - Time-limited access codes
+    - Multi-factor authentication
+  </Accordion>
+</AccordionGroup>
+
+### Configuration Example
+
+```c
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+
+// Enable SQ Code scanning
+zbar_image_scanner_set_config(scanner, ZBAR_SQCODE, ZBAR_CFG_ENABLE, 1);
+
+// Binary data handling (recommended for security data)
+zbar_image_scanner_set_config(scanner, ZBAR_SQCODE, ZBAR_CFG_BINARY, 1);
+
+// Enable position data for verification
+zbar_image_scanner_set_config(scanner, ZBAR_SQCODE, ZBAR_CFG_POSITION, 1);
+```
+
+### Scanning and Verification
+
+```c
+// Scan image
+int n = zbar_scan_image(scanner, image);
+
+// Iterate through symbols
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+while (symbol) {
+    zbar_symbol_type_t type = zbar_symbol_get_type(symbol);
+    
+    if (type == ZBAR_SQCODE) {
+        // Extract data
+        const char *data = zbar_symbol_get_data(symbol);
+        unsigned int length = zbar_symbol_get_data_length(symbol);
+        
+        // Verify security features
+        if (verify_sq_code_signature(data, length)) {
+            printf("Valid SQ Code authenticated\n");
+        } else {
+            printf("Invalid or tampered SQ Code\n");
+        }
+    }
+    
+    symbol = zbar_symbol_next(symbol);
+}
+```
+
+### Best Practices
+
+<AccordionGroup>
+  <Accordion title="Security Implementation">
+    - Always validate cryptographic signatures
+    - Use secure timestamp verification
+    - Implement replay attack prevention
+    - Verify certificate chains
+    - Log authentication attempts
+  </Accordion>
+  
+  <Accordion title="Integration">
+    - Combine with backend verification systems
+    - Use HTTPS for online validation
+    - Implement offline verification when possible
+    - Cache validation results appropriately
+    - Handle network failures gracefully
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    - Check symbol type before processing
+    - Validate data length and format
+    - Handle binary data correctly (no string assumptions)
+    - Implement proper timeout mechanisms
+    - Provide clear user feedback
+  </Accordion>
+</AccordionGroup>
+
+Reference: ~/workspace/source/include/zbar.h:109, ~/workspace/source/zbar/decoder/sq_finder.c:1
+
+## QR Code vs. SQ Code Comparison
+
+| Feature | QR Code | SQ Code |
+|---------|---------|----------|
+| **Primary Use** | General data encoding | Security/Authentication |
+| **Compatibility** | Universal | QR Code compatible |
+| **Security** | None (optional encryption) | Built-in authentication |
+| **Data Types** | Text, binary, numeric | Primarily signed/encrypted |
+| **Verification** | Application-specific | Cryptographic |
+| **Overhead** | Minimal | Additional security data |
+| **Speed** | Fast | Slightly slower (verification) |
+| **Standards** | ISO/IEC 18004 | Proprietary extension |
+
+## General 2D Barcode Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choosing Between QR Code and SQ Code">
+    **Use QR Code when:**
+    - General purpose data encoding
+    - Maximum compatibility needed
+    - Public information sharing
+    - Marketing and consumer applications
+    - No security requirements
+    
+    **Use SQ Code when:**
+    - Authentication required
+    - Anti-counterfeiting needed
+    - Document verification
+    - Access control
+    - Regulated industries (pharma, finance)
+  </Accordion>
+  
+  <Accordion title="Performance Optimization">
+    ```c
+    // For QR Code only applications
+    zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 0);
+    zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+    
+    // Adjust scan density for expected code size
+    // Large codes: reduce density for speed
+    zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_X_DENSITY, 1);
+    
+    // Small codes: increase density for reliability
+    zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_X_DENSITY, 3);
+    ```
+  </Accordion>
+  
+  <Accordion title="Image Requirements">
+    - **Resolution:** 5-6 pixels per module (recommended)
+    - **Contrast:** High contrast between dark and light modules
+    - **Lighting:** Uniform, avoid shadows and glare
+    - **Focus:** Sharp, avoid motion blur
+    - **Quiet Zone:** Minimum 4 modules white border
+    - **Format:** Grayscale (Y800) or RGB (converted internally)
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    ```c
+    int result = zbar_scan_image(scanner, image);
+    
+    if (result < 0) {
+        // Scanning error
+        fprintf(stderr, "Scan error: %s\n", 
+                zbar_image_scanner_error_string(scanner));
+    } else if (result == 0) {
+        // No codes found
+        printf("No 2D barcodes detected\n");
+    } else {
+        // Process found symbols
+        printf("Found %d symbol(s)\n", result);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Topics
+
+### Video Stream Processing
+
+```c
+// Enable result caching for video
+zbar_image_scanner_enable_cache(scanner, 1);
+
+// Set uncertainty threshold (frames required for confirmation)
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, 
+                              ZBAR_CFG_UNCERTAINTY, 3);
+
+// Process video frames
+while (capturing) {
+    zbar_image_t *frame = zbar_video_next_image(video);
+    int n = zbar_scan_image(scanner, frame);
+    
+    if (n > 0) {
+        const zbar_symbol_t *symbol = zbar_image_first_symbol(frame);
+        int count = zbar_symbol_get_count(symbol);
+        
+        if (count == 0) {
+            // First detection (newly verified)
+            process_new_symbol(symbol);
+        }
+        // count > 0 indicates duplicate from previous frames
+    }
+}
+```
+
+### Test Inverted Codes
+
+```c
+// Try scanning inverted codes (light on dark)
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, 
+                              ZBAR_CFG_TEST_INVERTED, 1);
+```
+
+Reference: ~/workspace/source/include/zbar.h:188
+
+## See Also
+
+<CardGroup cols={2}>
+  <Card title="1D Barcodes" icon="barcode" href="/symbologies/1d-codes">
+    Linear barcode symbologies
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/symbologies/overview">
+    General symbology configuration
+  </Card>
+  <Card title="Image Scanner" icon="camera" href="/api/image-scanner">
+    Image scanner API reference
+  </Card>
+  <Card title="Video Processing" icon="video" href="/api/video">
+    Video stream scanning
+  </Card>
+</CardGroup>

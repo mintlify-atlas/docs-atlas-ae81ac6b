@@ -1,0 +1,314 @@
+---
+title: Scanning Images
+description: Learn how to scan barcodes from static images using ZBar's ImageScanner API
+---
+
+The ImageScanner is ZBar's mid-level interface for detecting and decoding barcodes from static images. This guide covers image format requirements, scanner setup, and result extraction.
+
+## Image Format Requirements
+
+ZBar requires images in **Y800** (8-bit grayscale) format for scanning. If your image is in a different format, you must convert it first.
+
+### Supported Input Formats
+
+While scanning requires Y800, ZBar can convert from these formats:
+- **Y800/GRAY** - 8-bit grayscale (native format)
+- **RGB/BGR** - 24-bit color
+- **YUV/YCbCr** - Various YUV formats
+- **JPEG** - Via external libraries
+- **PNG** - Via libpng
+
+### Format Conversion
+
+Use `zbar_image_convert()` to convert images to Y800:
+
+```c
+zbar_image_t *gray_image = zbar_image_convert(color_image, zbar_fourcc('Y','8','0','0'));
+if (!gray_image) {
+    // Conversion failed - unsupported format
+    return -1;
+}
+```
+
+The fourcc macro creates a four-character code identifying the image format:
+
+```c
+unsigned long format = zbar_fourcc('Y', '8', '0', '0');  // Y800 grayscale
+```
+
+## Creating and Configuring ImageScanner
+
+<Steps>
+
+### Step 1: Create the scanner
+
+Allocate a new ImageScanner instance:
+
+```c ~/workspace/source/examples/scan_image.c
+zbar_image_scanner_t *scanner = zbar_image_scanner_create();
+if (!scanner) {
+    fprintf(stderr, "Failed to create scanner\n");
+    return -1;
+}
+```
+
+### Step 2: Configure symbology support
+
+Enable specific barcode types or enable all symbologies:
+
+```c ~/workspace/source/examples/scan_image.c
+// Enable all symbologies
+zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 1);
+
+// Or enable specific types
+zbar_image_scanner_set_config(scanner, ZBAR_QRCODE, ZBAR_CFG_ENABLE, 1);
+zbar_image_scanner_set_config(scanner, ZBAR_CODE128, ZBAR_CFG_ENABLE, 1);
+```
+
+**Note:** Setting symbology to `0` applies the configuration to all symbologies.
+
+### Step 3: Prepare the image
+
+Create and populate a ZBar image object:
+
+```c ~/workspace/source/examples/scan_image.c
+// Create image container
+zbar_image_t *image = zbar_image_create();
+
+// Set image format to Y800 (8-bit grayscale)
+zbar_image_set_format(image, zbar_fourcc('Y', '8', '0', '0'));
+
+// Set image dimensions
+zbar_image_set_size(image, width, height);
+
+// Attach image data
+zbar_image_set_data(image, raw_data, width * height, zbar_image_free_data);
+```
+
+The cleanup handler (`zbar_image_free_data`) is called when the image is destroyed, freeing the data buffer with `free()`.
+
+### Step 4: Scan the image
+
+Process the image and check for results:
+
+```c ~/workspace/source/examples/scan_image.c
+int n = zbar_scan_image(scanner, image);
+if (n < 0) {
+    fprintf(stderr, "Scan error\n");
+} else if (n == 0) {
+    printf("No symbols found\n");
+} else {
+    printf("Found %d symbol(s)\n", n);
+}
+```
+
+The return value indicates:
+- `> 0` - Number of symbols decoded
+- `0` - No symbols found
+- `< 0` - Error occurred
+
+</Steps>
+
+## Extracting Symbol Results
+
+After scanning, iterate through decoded symbols to extract data:
+
+```c ~/workspace/source/examples/scan_image.c
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+
+for (; symbol; symbol = zbar_symbol_next(symbol)) {
+    zbar_symbol_type_t typ = zbar_symbol_get_type(symbol);
+    const char *data = zbar_symbol_get_data(symbol);
+    
+    printf("decoded %s symbol \"%s\"\n", 
+           zbar_get_symbol_name(typ), 
+           data);
+}
+```
+
+### Symbol Information Available
+
+Each symbol provides rich metadata:
+
+<Accordion title="Symbol Type">
+```c
+zbar_symbol_type_t type = zbar_symbol_get_type(symbol);
+const char *name = zbar_get_symbol_name(type);
+```
+
+Returns symbology type like `ZBAR_QRCODE`, `ZBAR_CODE128`, `ZBAR_EAN13`, etc.
+</Accordion>
+
+<Accordion title="Symbol Data">
+```c ~/workspace/source/examples/scan_image.c
+const char *data = zbar_symbol_get_data(symbol);
+unsigned int length = zbar_symbol_get_data_length(symbol);
+```
+
+Use `get_data_length()` for binary data that may contain null bytes.
+</Accordion>
+
+<Accordion title="Location Information">
+```c
+unsigned loc_size = zbar_symbol_get_loc_size(symbol);
+for (unsigned i = 0; i < loc_size; i++) {
+    int x = zbar_symbol_get_loc_x(symbol, i);
+    int y = zbar_symbol_get_loc_y(symbol, i);
+    printf("Point %u: (%d, %d)\n", i, x, y);
+}
+```
+
+Provides polygon points where the symbol was detected in the image.
+</Accordion>
+
+<Accordion title="Quality Metrics">
+```c
+int quality = zbar_symbol_get_quality(symbol);
+int count = zbar_symbol_get_count(symbol);
+```
+
+- **Quality:** Relative confidence metric (higher is better)
+- **Count:** Cache count for video streams:
+  - `< 0` - Symbol is uncertain
+  - `0` - Newly verified symbol
+  - `> 0` - Duplicate from cache
+</Accordion>
+
+<Accordion title="Orientation">
+```c
+zbar_orientation_t orient = zbar_symbol_get_orientation(symbol);
+```
+
+Returns coarse orientation: `ZBAR_ORIENT_UP`, `ZBAR_ORIENT_RIGHT`, `ZBAR_ORIENT_DOWN`, `ZBAR_ORIENT_LEFT`, or `ZBAR_ORIENT_UNKNOWN`.
+</Accordion>
+
+## Complete Example
+
+Here's a complete example that reads a PNG file and scans for barcodes:
+
+```c ~/workspace/source/examples/scan_image.c
+#include <png.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <zbar.h>
+
+zbar_image_scanner_t *scanner = NULL;
+
+static void get_data(const char *name, int *width, int *height, void **raw)
+{
+    png_structp png;
+    png_infop info;
+    int color, bits;
+    png_bytep *rows;
+    int i;
+    FILE *file = fopen(name, "rb");
+
+    if (!file)
+        exit(2);
+    png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png)
+        exit(3);
+    if (setjmp(png_jmpbuf(png)))
+        exit(4);
+    info = png_create_info_struct(png);
+    if (!info)
+        exit(5);
+    png_init_io(png, file);
+    png_read_info(png, info);
+    
+    /* configure for 8bpp grayscale input */
+    color = png_get_color_type(png, info);
+    bits  = png_get_bit_depth(png, info);
+    if (color & PNG_COLOR_TYPE_PALETTE)
+        png_set_palette_to_rgb(png);
+    if (color == PNG_COLOR_TYPE_GRAY && bits < 8)
+        png_set_expand_gray_1_2_4_to_8(png);
+    if (bits == 16)
+        png_set_strip_16(png);
+    if (color & PNG_COLOR_MASK_ALPHA)
+        png_set_strip_alpha(png);
+    if (color & PNG_COLOR_MASK_COLOR)
+        png_set_rgb_to_gray_fixed(png, 1, -1, -1);
+
+    /* allocate image */
+    *width  = png_get_image_width(png, info);
+    *height = png_get_image_height(png, info);
+    *raw    = (png_bytep)calloc(*width * *height, sizeof(png_byte));
+    rows    = (png_bytep *)calloc(*height, sizeof(*rows));
+
+    for (i = 0; i < *height; i++)
+        rows[i] = ((png_bytep)(*raw)) + (*width * i);
+
+    png_read_image(png, rows);
+    free(rows);
+}
+
+int main(int argc, char **argv)
+{
+    int width, height, n;
+    void *raw;
+    zbar_image_t *image;
+    const zbar_symbol_t *symbol;
+
+    if (argc < 2)
+        return (1);
+
+    /* create a reader */
+    scanner = zbar_image_scanner_create();
+
+    /* configure the reader */
+    zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 1);
+
+    /* obtain image data */
+    width = 0, height = 0;
+    raw = NULL;
+    get_data(argv[1], &width, &height, &raw);
+
+    /* wrap image data */
+    image = zbar_image_create();
+    zbar_image_set_format(image, zbar_fourcc('Y', '8', '0', '0'));
+    zbar_image_set_size(image, width, height);
+    zbar_image_set_data(image, raw, width * height, zbar_image_free_data);
+
+    /* scan the image for barcodes */
+    n = zbar_scan_image(scanner, image);
+
+    /* extract results */
+    symbol = zbar_image_first_symbol(image);
+    for (; symbol; symbol = zbar_symbol_next(symbol)) {
+        /* do something useful with results */
+        zbar_symbol_type_t typ = zbar_symbol_get_type(symbol);
+        const char *data       = zbar_symbol_get_data(symbol);
+
+        printf("decoded %s symbol \"%s\"\n", zbar_get_symbol_name(typ), data);
+    }
+
+    /* clean up */
+    zbar_image_destroy(image);
+    zbar_image_scanner_destroy(scanner);
+
+    return (0);
+}
+```
+
+## Memory Management
+
+<Warning>
+**Important:** Always clean up resources to prevent memory leaks.
+</Warning>
+
+```c
+// Destroy image when done
+zbar_image_destroy(image);
+
+// Destroy scanner when done
+zbar_image_scanner_destroy(scanner);
+```
+
+The library uses reference counting internally. Images and symbols remain valid until explicitly destroyed or their reference count reaches zero.
+
+## See Also
+
+- [Configuration](/guides/configuration) - Configure symbology support and scanning parameters
+- [Video Scanning](/guides/video-scanning) - Scan from video streams
+- [Integration](/guides/integration) - Thread safety and error handling

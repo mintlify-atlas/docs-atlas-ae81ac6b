@@ -1,0 +1,632 @@
+---
+title: Troubleshooting
+description: Solutions to common build and runtime issues with ZBar Advanced
+---
+
+This guide covers common problems you might encounter when building or using ZBar Advanced, along with their solutions.
+
+## Build Issues
+
+<AccordionGroup>
+  <Accordion title="autoreconf fails with 'command not found'">
+    **Problem:** `autoreconf: command not found` or similar errors.
+    
+    **Cause:** GNU autotools are not installed.
+    
+    **Solution:**
+    ```bash
+    # Debian/Ubuntu
+    sudo apt-get install autoconf automake libtool gettext pkg-config
+    
+    # Fedora/RHEL
+    sudo dnf install autoconf automake libtool gettext-devel pkgconfig
+    
+    # macOS
+    brew install autoconf automake libtool gettext pkg-config
+    ```
+    
+    Ensure all tools are from the same prefix (all in `/usr` or all in `/usr/local`).
+  </Accordion>
+
+  <Accordion title="configure fails: 'cannot find X include files'">
+    **Problem:** `configure: error: Cannot find X include files`
+    
+    **Cause:** X11 development headers are not installed.
+    
+    **Solution:**
+    ```bash
+    # Debian/Ubuntu
+    sudo apt-get install libx11-dev libxext-dev libxv-dev
+    
+    # Fedora/RHEL
+    sudo dnf install libX11-devel libXext-devel libXv-devel
+    ```
+    
+    Or disable X support:
+    ```bash
+    ./configure --without-x
+    ```
+  </Accordion>
+
+  <Accordion title="configure fails: 'video support failed'">
+    **Problem:** `configure: error: test for video support failed!`
+    
+    **Cause:** Video4Linux headers are not installed (Linux only).
+    
+    **Solution:**
+    ```bash
+    # Debian/Ubuntu
+    sudo apt-get install libv4l-dev
+    
+    # Fedora/RHEL  
+    sudo dnf install v4l-utils-devel kernel-headers
+    ```
+    
+    Or disable video support:
+    ```bash
+    ./configure --disable-video
+    ```
+    
+    <Note>
+      Video support requires Linux kernel headers with Video4Linux2 API.
+    </Note>
+  </Accordion>
+
+  <Accordion title="configure fails: 'unable to find libjpeg'">
+    **Problem:** `configure: error: unable to find libjpeg!`
+    
+    **Cause:** JPEG library development files are not installed.
+    
+    **Solution:**
+    ```bash
+    # Debian/Ubuntu
+    sudo apt-get install libjpeg-dev
+    
+    # Fedora/RHEL
+    sudo dnf install libjpeg-turbo-devel
+    ```
+    
+    Or disable JPEG support:
+    ```bash
+    ./configure --without-jpeg
+    ```
+  </Accordion>
+
+  <Accordion title="configure fails: 'ImageMagick not found'">
+    **Problem:** `configure: error: Unable to find ImageMagick`
+    
+    **Cause:** ImageMagick development files are not installed.
+    
+    **Solution:**
+    ```bash
+    # Debian/Ubuntu (ImageMagick)
+    sudo apt-get install libmagickwand-dev
+    
+    # Or GraphicsMagick alternative
+    sudo apt-get install libgraphicsmagick1-dev
+    ./configure --with-graphicsmagick
+    
+    # Fedora/RHEL
+    sudo dnf install ImageMagick-devel
+    ```
+    
+    Or disable image file scanning:
+    ```bash
+    ./configure --without-imagemagick
+    ```
+    
+    <Warning>
+      Without ImageMagick/GraphicsMagick, `zbarimg` will not be built.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="configure fails: 'Python.h not found'">
+    **Problem:** `configure: error: unable to compile Python.h`
+    
+    **Cause:** Python development headers are not installed.
+    
+    **Solution:**
+    ```bash
+    # Debian/Ubuntu
+    sudo apt-get install python3-dev
+    
+    # Fedora/RHEL
+    sudo dnf install python3-devel
+    ```
+    
+    Or disable Python bindings:
+    ```bash
+    ./configure --without-python
+    ```
+  </Accordion>
+
+  <Accordion title="configure fails: 'jni.h not found'">
+    **Problem:** `configure: error: unable to find Java JNI!`
+    
+    **Cause:** Java Development Kit (JDK) is not installed or `JAVA_HOME` is not set.
+    
+    **Solution:**
+    ```bash
+    # Install JDK
+    # Debian/Ubuntu
+    sudo apt-get install default-jdk
+    
+    # Fedora/RHEL
+    sudo dnf install java-devel
+    
+    # Set JAVA_HOME
+    export JAVA_HOME=/usr/lib/jvm/default-java
+    ./configure
+    ```
+    
+    Or disable Java bindings:
+    ```bash
+    ./configure --without-java
+    ```
+  </Accordion>
+
+  <Accordion title="make fails: 'undefined reference to pthread_create'">
+    **Problem:** Linker errors with pthread functions.
+    
+    **Cause:** pthread library is not being linked.
+    
+    **Solution:**
+    ```bash
+    # Try adding pthread library explicitly
+    ./configure LIBS="-lpthread"
+    make
+    ```
+    
+    Or disable pthread support:
+    ```bash
+    ./configure --disable-pthread
+    ```
+  </Accordion>
+
+  <Accordion title="make fails: 'undefined reference to clock_gettime'">
+    **Problem:** Linker errors with `clock_gettime`.
+    
+    **Cause:** Real-time library is not linked (older glibc).
+    
+    **Solution:**
+    ```bash
+    ./configure LIBS="-lrt"
+    make
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Runtime Issues
+
+<AccordionGroup>
+  <Accordion title="zbarcam: 'unable to open video device' / Permission denied">
+    **Problem:** 
+    ```
+    ERROR: unable to access your video device
+    ERROR: (video) opening /dev/video0: Permission denied
+    ```
+    
+    **Cause:** User doesn't have permissions to access the video device.
+    
+    **Solutions:**
+    
+    1. **Add user to video group:**
+    ```bash
+    sudo usermod -a -G video $USER
+    # Log out and log back in
+    ```
+    
+    2. **Check device permissions:**
+    ```bash
+    ls -l /dev/video*
+    # Should show: crw-rw---- 1 root video ...
+    ```
+    
+    3. **Test with sudo (temporary):**
+    ```bash
+    sudo zbarcam
+    ```
+    
+    4. **Check udev rules:**
+    ```bash
+    # Create/check /etc/udev/rules.d/99-camera.rules
+    SUBSYSTEM=="video4linux", MODE="0666"
+    
+    # Reload udev rules
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+    ```
+  </Accordion>
+
+  <Accordion title="zbarcam: 'unable to access video device' / No such file">
+    **Problem:** 
+    ```
+    ERROR: (video) opening /dev/video0: No such file or directory
+    ```
+    
+    **Cause:** Video device doesn't exist or camera is not connected.
+    
+    **Solutions:**
+    
+    1. **Check if camera is connected:**
+    ```bash
+    ls /dev/video*
+    lsusb | grep -i camera
+    ```
+    
+    2. **Check if kernel modules are loaded:**
+    ```bash
+    lsmod | grep video
+    # Should show: uvcvideo, videodev, v4l2_common, etc.
+    ```
+    
+    3. **Load required modules:**
+    ```bash
+    sudo modprobe uvcvideo
+    ```
+    
+    4. **Check kernel messages:**
+    ```bash
+    dmesg | grep video
+    dmesg | grep uvcvideo
+    ```
+  </Accordion>
+
+  <Accordion title="zbarcam: Camera opens but no video display">
+    **Problem:** zbarcam starts but window shows black or frozen image.
+    
+    **Cause:** Video format negotiation issues or display problems.
+    
+    **Solutions:**
+    
+    1. **Try with verbose output:**
+    ```bash
+    zbarcam -v /dev/video0
+    # or
+    zbarcam --verbose=10 /dev/video0
+    ```
+    
+    2. **List supported formats:**
+    ```bash
+    v4l2-ctl --device=/dev/video0 --list-formats-ext
+    ```
+    
+    3. **Check X display:**
+    ```bash
+    echo $DISPLAY
+    # Should show: :0 or :1 etc.
+    xdpyinfo | head
+    ```
+    
+    4. **Try different video device:**
+    ```bash
+    zbarcam /dev/video1
+    zbarcam /dev/video2
+    ```
+  </Accordion>
+
+  <Accordion title="zbarimg: 'no barcode detected' for valid images">
+    **Problem:** zbarimg doesn't detect barcodes in valid images.
+    
+    **Cause:** Image quality, format issues, or symbology not enabled.
+    
+    **Solutions:**
+    
+    1. **Enable specific symbology:**
+    ```bash
+    zbarimg --set qrcode.enable=1 image.png
+    ```
+    
+    2. **Increase verbosity to debug:**
+    ```bash
+    zbarimg -v image.png
+    zbarimg --verbose=10 image.png
+    ```
+    
+    3. **Check image format:**
+    ```bash
+    file image.png
+    identify image.png  # ImageMagick tool
+    ```
+    
+    4. **Test with known-good image:**
+    ```bash
+    zbarimg examples/code-128.png
+    ```
+    
+    5. **Improve image quality:**
+    - Ensure adequate contrast
+    - Avoid blur or distortion
+    - Try different lighting
+    - Scale image to reasonable size
+  </Accordion>
+
+  <Accordion title="Library not found errors at runtime">
+    **Problem:** 
+    ```
+    error while loading shared libraries: libzbar.so.0: cannot open shared object file
+    ```
+    
+    **Cause:** Library path not in `LD_LIBRARY_PATH` or ldconfig cache.
+    
+    **Solutions:**
+    
+    1. **Update ldconfig cache:**
+    ```bash
+    sudo ldconfig
+    ```
+    
+    2. **Add library path:**
+    ```bash
+    # Temporary
+    export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+    
+    # Permanent (add to ~/.bashrc)
+    echo 'export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+    ```
+    
+    3. **Configure ldconfig:**
+    ```bash
+    # Create config file
+    echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/zbar.conf
+    sudo ldconfig
+    ```
+    
+    4. **Check installation prefix:**
+    ```bash
+    # If you used custom prefix
+    ./configure --prefix=/opt/zbar
+    # Then set:
+    export LD_LIBRARY_PATH=/opt/zbar/lib:$LD_LIBRARY_PATH
+    ```
+  </Accordion>
+
+  <Accordion title="D-Bus errors: 'Connection refused' or 'Failed to connect'">
+    **Problem:** D-Bus integration not working.
+    
+    **Cause:** D-Bus daemon not running or configuration issues.
+    
+    **Solutions:**
+    
+    1. **Check D-Bus is running:**
+    ```bash
+    ps aux | grep dbus-daemon
+    ```
+    
+    2. **Check D-Bus configuration:**
+    ```bash
+    # Configuration should be in:
+    ls /etc/dbus-1/system.d/org.linuxtv.Zbar1.conf
+    ```
+    
+    3. **Reload D-Bus configuration:**
+    ```bash
+    sudo systemctl reload dbus
+    ```
+    
+    4. **Test D-Bus manually:**
+    ```bash
+    dbus-monitor --system interface=org.linuxtv.Zbar1.Code
+    ```
+    
+    5. **Check permissions:**
+    ```bash
+    # D-Bus config should allow your user/group
+    sudo cat /etc/dbus-1/system.d/org.linuxtv.Zbar1.conf
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Debugging Tips
+
+### Enable Verbose Output
+
+All ZBar command-line tools support verbosity flags:
+
+```bash
+# Increase verbosity incrementally
+zbarcam -v
+zbarcam -vv
+zbarcam -vvv
+
+# Set specific verbosity level (0-32)
+zbarcam --verbose=10
+zbarimg --verbose=16 image.png
+```
+
+**Verbosity Levels:**
+- **0:** Silent (errors only)
+- **1:** Basic info
+- **2-4:** Detailed operation info
+- **8:** Format conversion details
+- **16:** Decoder details
+- **32:** Maximum debug output
+
+### Check Build Configuration
+
+Verify what was enabled during build:
+
+```bash
+# Check configure summary output
+./configure 2>&1 | tail -n 30
+
+# Check compiled features
+zbarcam --version
+zbarimg --version
+
+# Check available symbologies
+zbarimg --set '?'  # Lists all available symbologies
+```
+
+### Test Video Devices
+
+Diagnose video device issues:
+
+```bash
+# List all video devices
+ls -la /dev/video*
+
+# Get device information
+v4l2-ctl --device=/dev/video0 --all
+
+# List supported formats
+v4l2-ctl --device=/dev/video0 --list-formats-ext
+
+# Test with simple viewer
+ffplay /dev/video0
+# or
+vlc v4l2:///dev/video0
+```
+
+### Analyze Images
+
+Debug image scanning issues:
+
+```bash
+# Check image properties
+file image.png
+identify -verbose image.png
+
+# Convert to different format
+convert image.jpg -quality 100 image.png
+
+# Adjust image for better scanning
+convert image.png -normalize -contrast enhanced.png
+zbarimg enhanced.png
+```
+
+### Memory Debugging
+
+Check for memory leaks or issues:
+
+```bash
+# Build with debugging symbols
+./configure CFLAGS="-g -O0"
+make
+
+# Run with valgrind
+valgrind --leak-check=full zbarcam
+valgrind --leak-check=full zbarimg image.png
+
+# Run with gdb
+gdb zbarcam
+(gdb) run /dev/video0
+```
+
+### System Information
+
+Gather information for bug reports:
+
+```bash
+# ZBar version
+zbarcam --version
+
+# System information
+uname -a
+lsb_release -a  # Linux distribution
+
+# Camera information
+lsusb | grep -i camera
+v4l2-ctl --list-devices
+
+# Library dependencies
+ldd /usr/local/bin/zbarcam
+ldd /usr/local/lib/libzbar.so
+
+# Build configuration
+cat config.log | grep -A 5 "configure:"
+```
+
+## Performance Issues
+
+<AccordionGroup>
+  <Accordion title="Slow barcode detection">
+    **Solutions:**
+    
+    1. **Enable only needed symbologies:**
+    ```bash
+    # Disable all except QR codes
+    zbarcam --set '*.enable=0' --set 'qrcode.enable=1'
+    ```
+    
+    2. **Reduce image resolution:**
+    ```bash
+    # Lower resolution often improves speed
+    zbarcam --set video.width=640 --set video.height=480
+    ```
+    
+    3. **Use compiled optimizations:**
+    ```bash
+    ./configure CFLAGS="-O3 -march=native"
+    make clean && make
+    ```
+  </Accordion>
+
+  <Accordion title="High CPU usage">
+    **Solutions:**
+    
+    1. **Check frame rate:**
+    ```bash
+    # Many cameras default to high FPS
+    v4l2-ctl --device=/dev/video0 --set-parm=15  # Set to 15 FPS
+    ```
+    
+    2. **Disable threading if causing issues:**
+    ```bash
+    ./configure --disable-pthread
+    make clean && make
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Platform-Specific Issues
+
+### Linux
+
+- **Wayland Display:** Some features require X11. Use `GDK_BACKEND=x11` for GTK apps.
+- **SELinux:** May block camera access. Check with `sudo ausearch -m avc -ts recent`.
+- **AppArmor:** May restrict access. Check `/var/log/syslog` for denials.
+
+### Windows (MinGW/Cygwin)
+
+- **DLL Not Found:** Ensure all DLL dependencies are in PATH or application directory.
+- **Camera Access:** DirectShow support is better than VfW for modern cameras.
+- **Build Path Spaces:** Avoid spaces in build path, use short paths.
+
+### macOS
+
+- **Camera Permission:** macOS requires camera permission in System Preferences.
+- **Library Paths:** Use `DYLD_LIBRARY_PATH` instead of `LD_LIBRARY_PATH`.
+- **Homebrew Conflicts:** Ensure all dependencies from same Homebrew prefix.
+
+## Getting More Help
+
+If your issue isn't covered here:
+
+1. **Check GitHub Issues:** https://github.com/mchehab/zbar/issues
+2. **Search Mailing List Archives:** linux-media@vger.kernel.org
+3. **Ask for Help:**
+   - Open a GitHub issue with detailed information
+   - Post to the mailing list
+   - Include version, OS, and steps to reproduce
+
+### Information to Include in Bug Reports
+
+- ZBar version (`zbarcam --version`)
+- Operating system and version
+- Build configuration (configure output summary)
+- Complete error messages
+- Steps to reproduce
+- Verbose output (`-v` or `--verbose=10`)
+- Sample images/videos if applicable
+
+**See also:** [Contributing Guide](./contributing) for how to report bugs effectively.
+
+<CardGroup cols={2}>
+  <Card title="Building" icon="hammer" href="./building">
+    Complete build instructions
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="./contributing">
+    How to contribute fixes
+  </Card>
+</CardGroup>

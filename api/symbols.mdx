@@ -1,0 +1,534 @@
+---
+title: "Symbols"
+description: "Working with decoded barcode symbol results, including iteration and metadata extraction"
+---
+
+## Overview
+
+The Symbol interface provides access to decoded barcode results. Symbols store the barcode type, data, image location, and metadata. All memory is owned by the library.
+
+## Key Concepts
+
+- **Symbol** - Individual decoded barcode result
+- **Symbol Set** - Container for multiple symbols from a single image
+- **Components** - Sub-symbols that make up composite barcodes
+- **Reference Counting** - Memory management for symbols
+
+## Symbol Reference Counting
+
+### zbar_symbol_ref
+
+Manipulate symbol reference count.
+
+```c
+void zbar_symbol_ref(const zbar_symbol_t *symbol, int refs);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ParamField path="refs" type="int" required>
+  Number to add to reference count (positive to increment, negative to decrement)
+</ParamField>
+
+Increment the reference count when storing a new reference. Decrement when the reference is no longer used. Do not refer to the symbol once the count is decremented and the containing image has been recycled or destroyed.
+
+<Note>
+The containing image holds a reference to symbols. You only need reference counting if you keep a symbol after the image is destroyed or reused.
+</Note>
+
+**Example:**
+```c
+// Store symbol for later use
+zbar_symbol_ref(symbol, 1);
+
+// ... use symbol ...
+
+// Release when done
+zbar_symbol_ref(symbol, -1);
+```
+
+## Symbol Data Access
+
+### zbar_symbol_get_type
+
+Retrieve the type of decoded symbol.
+
+```c
+zbar_symbol_type_t zbar_symbol_get_type(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="zbar_symbol_type_t">
+  The symbol type (e.g., `ZBAR_QRCODE`, `ZBAR_CODE128`, etc.)
+</ResponseField>
+
+### zbar_symbol_get_data
+
+Retrieve data decoded from the symbol.
+
+```c
+const char *zbar_symbol_get_data(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="const char*">
+  Null-terminated data string
+</ResponseField>
+
+### zbar_symbol_get_data_length
+
+Retrieve length of binary data.
+
+```c
+unsigned int zbar_symbol_get_data_length(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="unsigned int">
+  The length of the decoded data in bytes
+</ResponseField>
+
+Use this for binary data that may contain null bytes.
+
+**Example:**
+```c
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+for (; symbol; symbol = zbar_symbol_next(symbol)) {
+    zbar_symbol_type_t type = zbar_symbol_get_type(symbol);
+    const char *data = zbar_symbol_get_data(symbol);
+    unsigned int len = zbar_symbol_get_data_length(symbol);
+    
+    printf("Found %s: ", zbar_get_symbol_name(type));
+    fwrite(data, 1, len, stdout);
+    printf("\n");
+}
+```
+
+## Symbol Metadata
+
+### zbar_symbol_get_quality
+
+Retrieve symbol confidence metric.
+
+```c
+int zbar_symbol_get_quality(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="int">
+  An unscaled, relative quality value (larger is better)
+</ResponseField>
+
+<Note>
+The exact definition may change as the metric is refined. Only the ordered relationship between values is guaranteed to remain stable.
+</Note>
+
+### zbar_symbol_get_count
+
+Retrieve current cache count.
+
+```c
+int zbar_symbol_get_count(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="int">
+  - Negative: Symbol is still uncertain
+  - 0: Symbol is newly verified
+  - Positive: Duplicate symbol (count indicates number of duplicates)
+</ResponseField>
+
+When the cache is enabled for the image scanner, this provides inter-frame reliability and redundancy information for video streams.
+
+### zbar_symbol_get_configs
+
+Retrieve symbology boolean config settings.
+
+```c
+unsigned int zbar_symbol_get_configs(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="unsigned int">
+  A bitmask indicating which configs were set during decoding
+</ResponseField>
+
+### zbar_symbol_get_modifiers
+
+Retrieve symbology modifier flags.
+
+```c
+unsigned int zbar_symbol_get_modifiers(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="unsigned int">
+  A bitmask indicating detected characteristics
+</ResponseField>
+
+**Modifier flags:**
+
+- `ZBAR_MOD_GS1` - Barcode tagged as GS1 (EAN.UCC) reserved (FNC1 before first data character). Data may be parsed as GS1 AIs.
+- `ZBAR_MOD_AIM` - Barcode tagged as AIM reserved (FNC1 after first character or digit pair)
+
+### zbar_symbol_get_orientation
+
+Retrieve general orientation of decoded symbol.
+
+```c
+zbar_orientation_t zbar_symbol_get_orientation(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="zbar_orientation_t">
+  Coarse orientation or `ZBAR_ORIENT_UNKNOWN`
+</ResponseField>
+
+**Orientation values:**
+
+- `ZBAR_ORIENT_UP` - Upright, read left to right
+- `ZBAR_ORIENT_RIGHT` - Sideways, read top to bottom
+- `ZBAR_ORIENT_DOWN` - Upside-down, read right to left
+- `ZBAR_ORIENT_LEFT` - Sideways, read bottom to top
+- `ZBAR_ORIENT_UNKNOWN` - Unable to determine
+
+## Location Polygon
+
+### zbar_symbol_get_loc_size
+
+Retrieve the number of points in the location polygon.
+
+```c
+unsigned zbar_symbol_get_loc_size(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="unsigned">
+  Number of points in the location polygon
+</ResponseField>
+
+The location polygon defines the image area where the symbol was extracted from.
+
+<Note>
+Currently, this is not a true polygon but the scan locations where the symbol was decoded.
+</Note>
+
+### zbar_symbol_get_loc_x
+
+Retrieve location polygon x-coordinate.
+
+```c
+int zbar_symbol_get_loc_x(const zbar_symbol_t *symbol, unsigned index);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ParamField path="index" type="unsigned" required>
+  0-based point index
+</ParamField>
+
+<ResponseField name="return" type="int">
+  The x-coordinate, or -1 if index is out of range
+</ResponseField>
+
+### zbar_symbol_get_loc_y
+
+Retrieve location polygon y-coordinate.
+
+```c
+int zbar_symbol_get_loc_y(const zbar_symbol_t *symbol, unsigned index);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ParamField path="index" type="unsigned" required>
+  0-based point index
+</ParamField>
+
+<ResponseField name="return" type="int">
+  The y-coordinate, or -1 if index is out of range
+</ResponseField>
+
+**Example:**
+```c
+// Draw bounding polygon
+unsigned n = zbar_symbol_get_loc_size(symbol);
+for (unsigned i = 0; i < n; i++) {
+    int x = zbar_symbol_get_loc_x(symbol, i);
+    int y = zbar_symbol_get_loc_y(symbol, i);
+    printf("Point %u: (%d, %d)\n", i, x, y);
+}
+```
+
+## Symbol Iteration
+
+### zbar_symbol_next
+
+Iterate to the next symbol in the set.
+
+```c
+const zbar_symbol_t *zbar_symbol_next(const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The current symbol
+</ParamField>
+
+<ResponseField name="return" type="const zbar_symbol_t*">
+  The next symbol in the set, or NULL when no more results available
+</ResponseField>
+
+**Example:**
+```c
+const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+for (; symbol; symbol = zbar_symbol_next(symbol)) {
+    printf("Found: %s\n", zbar_symbol_get_data(symbol));
+}
+```
+
+## Composite Symbols
+
+### zbar_symbol_get_components
+
+Retrieve components of a composite result.
+
+```c
+const zbar_symbol_set_t *zbar_symbol_get_components(
+    const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="const zbar_symbol_set_t*">
+  Symbol set containing components, or NULL if already a physical symbol
+</ResponseField>
+
+Composite barcodes (like EAN-13 with add-on) have multiple physical components.
+
+### zbar_symbol_first_component
+
+Iterate components of a composite result.
+
+```c
+const zbar_symbol_t *zbar_symbol_first_component(
+    const zbar_symbol_t *symbol);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol instance
+</ParamField>
+
+<ResponseField name="return" type="const zbar_symbol_t*">
+  First physical component symbol, or NULL if already a physical symbol
+</ResponseField>
+
+**Example:**
+```c
+if (zbar_symbol_get_type(symbol) == ZBAR_COMPOSITE) {
+    printf("Composite barcode:\n");
+    const zbar_symbol_t *comp = zbar_symbol_first_component(symbol);
+    for (; comp; comp = zbar_symbol_next(comp)) {
+        printf("  Component %s: %s\n",
+               zbar_get_symbol_name(zbar_symbol_get_type(comp)),
+               zbar_symbol_get_data(comp));
+    }
+}
+```
+
+## XML Export
+
+### zbar_symbol_xml
+
+Print XML symbol element representation.
+
+```c
+char *zbar_symbol_xml(const zbar_symbol_t *symbol,
+                      char **buffer,
+                      unsigned *buflen);
+```
+
+<ParamField path="symbol" type="const zbar_symbol_t*" required>
+  The symbol to export
+</ParamField>
+
+<ParamField path="buffer" type="char**" required>
+  In/out result buffer pointer (reallocated if necessary)
+</ParamField>
+
+<ParamField path="buflen" type="unsigned*" required>
+  In/out buffer length
+</ParamField>
+
+<ResponseField name="return" type="char*">
+  The buffer pointer (may be reallocated)
+</ResponseField>
+
+See [barcode.xsd](http://zbar.sourceforge.net/2008/barcode.xsd) for the schema.
+
+## Symbol Set Interface
+
+Symbol sets are containers for decoded results associated with an image or composite symbol.
+
+### zbar_symbol_set_ref
+
+Manipulate symbol set reference count.
+
+```c
+void zbar_symbol_set_ref(const zbar_symbol_set_t *symbols, int refs);
+```
+
+<ParamField path="symbols" type="const zbar_symbol_set_t*" required>
+  The symbol set instance
+</ParamField>
+
+<ParamField path="refs" type="int" required>
+  Number to add to reference count
+</ParamField>
+
+### zbar_symbol_set_get_size
+
+Retrieve symbol set size.
+
+```c
+int zbar_symbol_set_get_size(const zbar_symbol_set_t *symbols);
+```
+
+<ParamField path="symbols" type="const zbar_symbol_set_t*" required>
+  The symbol set instance
+</ParamField>
+
+<ResponseField name="return" type="int">
+  The number of symbols in the set
+</ResponseField>
+
+### zbar_symbol_set_first_symbol
+
+Get the first symbol in the set.
+
+```c
+const zbar_symbol_t *zbar_symbol_set_first_symbol(
+    const zbar_symbol_set_t *symbols);
+```
+
+<ParamField path="symbols" type="const zbar_symbol_set_t*" required>
+  The symbol set instance
+</ParamField>
+
+<ResponseField name="return" type="const zbar_symbol_t*">
+  The first decoded symbol, or NULL if the set is empty
+</ResponseField>
+
+### zbar_symbol_set_first_unfiltered
+
+Get the first unfiltered symbol.
+
+```c
+const zbar_symbol_t *zbar_symbol_set_first_unfiltered(
+    const zbar_symbol_set_t *symbols);
+```
+
+<ParamField path="symbols" type="const zbar_symbol_set_t*" required>
+  The symbol set instance
+</ParamField>
+
+<ResponseField name="return" type="const zbar_symbol_t*">
+  The first decoded symbol before filtering, or NULL if empty
+</ResponseField>
+
+Returns raw results before filtering (useful for debugging).
+
+## Complete Example
+
+```c
+#include <stdio.h>
+#include <zbar.h>
+
+void process_symbols(zbar_image_t *image) {
+    // Get symbol set
+    const zbar_symbol_set_t *symbols = zbar_image_get_symbols(image);
+    int count = zbar_symbol_set_get_size(symbols);
+    printf("Found %d symbols\n", count);
+    
+    // Iterate symbols
+    const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+    for (; symbol; symbol = zbar_symbol_next(symbol)) {
+        // Get basic info
+        zbar_symbol_type_t type = zbar_symbol_get_type(symbol);
+        const char *data = zbar_symbol_get_data(symbol);
+        unsigned int len = zbar_symbol_get_data_length(symbol);
+        
+        printf("\nSymbol: %s\n", zbar_get_symbol_name(type));
+        printf("Data (%u bytes): %s\n", len, data);
+        
+        // Get metadata
+        int quality = zbar_symbol_get_quality(symbol);
+        int count = zbar_symbol_get_count(symbol);
+        printf("Quality: %d, Count: %d\n", quality, count);
+        
+        // Get orientation
+        zbar_orientation_t orient = zbar_symbol_get_orientation(symbol);
+        printf("Orientation: %s\n", zbar_get_orientation_name(orient));
+        
+        // Get location
+        unsigned n = zbar_symbol_get_loc_size(symbol);
+        printf("Location (%u points):\n", n);
+        for (unsigned i = 0; i < n; i++) {
+            int x = zbar_symbol_get_loc_x(symbol, i);
+            int y = zbar_symbol_get_loc_y(symbol, i);
+            printf("  (%d, %d)\n", x, y);
+        }
+        
+        // Check for composite components
+        const zbar_symbol_t *comp = zbar_symbol_first_component(symbol);
+        if (comp) {
+            printf("Components:\n");
+            for (; comp; comp = zbar_symbol_next(comp)) {
+                printf("  %s: %s\n",
+                       zbar_get_symbol_name(zbar_symbol_get_type(comp)),
+                       zbar_symbol_get_data(comp));
+            }
+        }
+    }
+}
+```
+
+## See Also
+
+- [ImageScanner](/api/image-scanner) - Scanning images for symbols
+- [Processor](/api/processor) - High-level processing interface
+- [Overview](/api/overview) - API architecture and patterns
